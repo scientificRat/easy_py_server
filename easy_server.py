@@ -144,13 +144,13 @@ class OnRequestListener:
 
 
 class EasyServer(HTTPServer):
-    def __init__(self, server_address, RequestHandlerClass):
-        super().__init__(server_address, RequestHandlerClass)
+    def __init__(self, address="localhost", port=8090):
+        super().__init__((address, port), EasyServerHandler)
         self.get_listeners = {}
         self.post_listeners = {}
         self.sessions = {}
 
-    def addGETListener(self, path, listener: OnRequestListener):
+    def get(self, path, listener: OnRequestListener):
         """
         :param path: response url
         :param listener:  func(session, param)  session and param are both dict type
@@ -158,7 +158,7 @@ class EasyServer(HTTPServer):
         """
         self.get_listeners[path] = listener
 
-    def addPOSTListener(self, path, listener: OnRequestListener):
+    def post(self, path, listener: OnRequestListener):
         """
         :param path: response url
         :param listener:  func(session, param)  session and param are both dict type
@@ -168,7 +168,7 @@ class EasyServer(HTTPServer):
 
 
 if __name__ == '__main__':
-    httpd = EasyServer(('127.0.0.1', 8090), EasyServerHandler)
-    httpd.addGETListener("/api/test", lambda session, param: "API1: " + param['a'])
-    httpd.addPOSTListener("/api/test2", lambda session, param: "API2: " + param['b'])
+    httpd = EasyServer()
+    httpd.get("/api/test", lambda session, param: "API1: " + param['a'])
+    httpd.post("/api/test2", lambda session, param: "API2: " + param['b'])
     httpd.serve_forever()
