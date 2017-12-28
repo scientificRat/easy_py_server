@@ -18,15 +18,25 @@ ERROR_MESSAGE_FORMAT = """
     </html>
     """
 extensions_map = {
-    'py': 'text/plain', 'c': 'text/plain', 'h': 'text/plain', 'cpp': 'text/plain',
-    'html': 'text/html', 'htm': 'text/html',
-    'jpeg': 'image/jpeg', 'jpg': 'image/jpeg',
+    'py': 'text/plain', 'c': 'text/plain', 'h': 'text/plain', 'cpp': 'text/plain', 'hpp': 'text/plain',
+    'txt': 'text/plain',
+    'html': 'text/html', 'htm': 'text/html', 'htx': 'text/html',
+    'csv': 'text/csv',
+    'jpeg': 'image/jpeg', 'jpg': 'image/jpeg', 'jpe': 'image/jpeg',
     'gif': 'image/gif',
     'png': 'image/png',
     'svg': 'image/svg+xml',
+    'tif': 'image/tiff', 'tiff': "image/tiff",
+    'ico': 'application/x-ico',
     'css': 'text/css',
     'js': 'application/javascript',
-    'json': 'application/json'
+    'json': 'application/json',
+    'pdf': 'application/pdf',
+    'woff': 'application/font-woff',
+    'mp3': 'audio/mp3',
+    'mp4': 'audio/mp4',
+    'wma': 'audio/x-ms-wma',
+    'avi': 'video/avi',
 }
 
 
@@ -104,7 +114,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 return
 
             postfix = path.split('.')[-1].lower()
-            ctype = 'text/plain' if len(postfix) == len(path) else extensions_map.get(postfix, 'text/plain')
+            ctype = 'application/octet-stream' if len(postfix) == len(path) else extensions_map.get(postfix,
+                                                                                                    'text/plain')
             try:
                 f = open(path, 'rb')
             except OSError:
