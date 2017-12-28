@@ -98,7 +98,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         # 解析并分离URL参数
         row = self.path.split('?')
-        param = {} if len(row) <= 2 else self.parse_parameter(row[1])
+        param = {} if len(row) < 2 else self.parse_parameter(row[1])
         path = row[0]  # split 结果无论如何有一个
         # 首先尝试调用api listener, 如果没有对应的listener则认为是静态资源
         if not self.find_and_call_api_listener(path, param, self.server.get_listeners):
