@@ -91,7 +91,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     @staticmethod
     def parse_parameter(src_str):
         param = {}
-        for item in re.findall(r'(^|&)([a-zA-Z0-9]+)=([^&]*)', src_str):
+        for item in re.findall(r'(^|&)([a-zA-Z0-9_-]+)=([^&]*)', src_str):
             param[item[1]] = item[2]
         return param
 
