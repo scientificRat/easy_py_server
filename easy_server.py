@@ -52,8 +52,6 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def on_exception(self):
         exc_type, exc_value, exc_traceback = sys.exc_info()
         err_list = traceback.format_exception(exc_type, exc_value, exc_traceback, limit=5)
-
-        print(err_list)
         e_str = ""
         for item in err_list:
             e_str += str(item)
@@ -63,15 +61,22 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         if path in listeners_dic:
             session = self.get_session()
             try:
-                content = listeners_dic[path](session, param).encode('utf-8')
+                response_type = listeners_dic[path][1]
+                rtn = listeners_dic[path][0](session, param)
+                if type(rtn) == str:
+                    content = rtn.encode("utf-8")
+                elif type(rtn) == bytes:
+                    content = rtn
+                else:
+                    content = bytes(rtn)
             except:
                 self.on_exception()
                 return
             self.send_response(HTTPStatus.OK)
-            self.send_header("Content-type", 'text/html')
+            self.send_header("Content-type", response_type)
             self.send_header("Content-Length", len(content))
             if session is None:
-                self.send_header("Set-Cookie", str(uuid.uuid1()).replace("-", ""))
+                self.send_header("Set-Cookie", self.SESSION_COOKIE_NAME + "=" + str(uuid.uuid1()).replace("-", ""))
             self.end_headers()
             self.wfile.write(content)
             return True
@@ -114,8 +119,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 return
 
             postfix = path.split('.')[-1].lower()
-            ctype = 'application/octet-stream' if len(postfix) == len(path) else extensions_map.get(postfix,
-                                                                                                    'text/plain')
+            default_type = 'application/octet-stream'
+            content_type = default_type if len(postfix) == len(path) else extensions_map.get(postfix, default_type)
             try:
                 f = open(path, 'rb')
             except OSError:
@@ -123,7 +128,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 return
             try:
                 self.send_response(HTTPStatus.OK)
-                self.send_header("Content-type", ctype)
+                self.send_header("Content-type", content_type)
                 fs = os.fstat(f.fileno())
                 self.send_header("Content-Length", str(fs[6]))
                 self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
@@ -150,7 +155,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
 
 
 class OnRequestListener:
-    def __call__(self, session, parameters):
+    def __call__(self, session: dict, parameters: dict):
         pass
 
 
@@ -161,21 +166,23 @@ class EasyServer(HTTPServer):
         self.post_listeners = {}
         self.sessions = {}
 
-    def get(self, path, listener: OnRequestListener):
+    def get(self, path, listener: OnRequestListener, response_type="text/html; charset=utf-8"):
         """
         :param path: response url
         :param listener:  func(session, param)  session and param are both dict type
+        :param response_type: response header Content-type value
         :return: None
         """
-        self.get_listeners[path] = listener
+        self.get_listeners[path] = listener, response_type
 
-    def post(self, path, listener: OnRequestListener):
+    def post(self, path, listener: OnRequestListener, response_type="text/html; charset=utf-8"):
         """
         :param path: response url
         :param listener:  func(session, param)  session and param are both dict type
+        :param response_type: response header Content-type value
         :return: None
         """
-        self.post_listeners[path] = listener
+        self.post_listeners[path] = listener, response_type
 
 
 if __name__ == '__main__':
