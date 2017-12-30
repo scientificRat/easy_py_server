@@ -58,6 +58,9 @@ class Request:
     def getSession(self, key) -> Optional[Any]:
         return self._session.get(key, None)
 
+    def removeSession(self, key):
+        self._session.pop(key, None)
+
     def setSession(self, key, value):
         self._session[key] = value
 
