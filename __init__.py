@@ -4,6 +4,7 @@ import os, sys
 import re
 import uuid
 import traceback
+import urllib.parse
 
 ERROR_MESSAGE_FORMAT = """
     <!DOCTYPE>
@@ -118,13 +119,24 @@ class EasyServerHandler(BaseHTTPRequestHandler):
 
         self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", e_str)
 
-    def find_and_call_api_listener(self, path: str, param: dict, listeners_dic: Dict[str, RequestListener]):
-        if path in listeners_dic:
+    def find_and_call_api_listener(self, path: str, param: dict, listeners_dic):
+        listener = listeners_dic.get((path,), None)
+        if listener is None:
+            for k in listeners_dic:
+                match = re.fullmatch(k[0], path)
+                if match is not None:
+                    path_param_values = match.groups()
+                    if len(path_param_values) == len(k) - 1:
+                        for i in range(1, len(k)):
+                            param[k[i]] = urllib.parse.unquote(path_param_values[i - 1])
+                            listener = listeners_dic[k]
+                        break
+        if listener is not None:
             session = self.get_session()
             request = Request(session if session is not None else {}, param)
             response = Response()
             try:
-                rtn = listeners_dic[path](request, response)
+                rtn = listener(request, response)
                 # if error message is set, ignore any return content
                 if response.getErrorMessage() is not None:
                     self.send_error(response.getStatus(), None, response.getErrorMessage())
@@ -163,14 +175,14 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def parse_parameter(src_str):
         param = {}
         for item in re.findall(r'(^|&)([a-zA-Z0-9_-]+)=([^&]*)', src_str):
-            param[item[1]] = item[2]
+            param[item[1]] = urllib.parse.unquote(item[2])
         return param
 
     def do_GET(self):
         # 解析并分离URL参数
         row = self.path.split('?')
         param = {} if len(row) < 2 else self.parse_parameter(row[1])
-        path = row[0]  # split 结果无论如何有一个
+        path = row[0]
         # 首先尝试调用api listener, 如果没有对应的listener则认为是静态资源
         if not self.find_and_call_api_listener(path, param, self.server.get_listeners):
             # static resources
@@ -235,7 +247,10 @@ class EasyServer(HTTPServer):
         :param listener:  func(request: Request, response: Response)-> Any
         :return: self
         """
-        self.get_listeners[path] = listener
+        path_params = tuple(re.findall("(:[^/]+)", path))
+        for parm in path_params:
+            path = path.replace(parm, "([^/]+)")
+        self.get_listeners[(path,) + path_params] = listener
         return self
 
     def addPostListener(self, path, listener):
@@ -245,7 +260,10 @@ class EasyServer(HTTPServer):
         :param listener:  func(request: Request, response: Response)-> Any
         :return: self
         """
-        self.post_listeners[path] = listener
+        path_params = tuple(re.findall("(:[^/]+)", path))
+        for parm in path_params:
+            path = path.replace(parm, "([^/]+)")
+        self.post_listeners[(path,) + path_params] = listener
         return self
 
     def get(self, path, content_type="text/html; charset=utf-8"):
@@ -276,7 +294,7 @@ if __name__ == '__main__':
     httpd.addGetListener("/demo1", lambda request, response: "a=" + request.getParam('a'))
 
 
-    @httpd.get("/api")
+    @httpd.get("/api",content_type="application/json; charset=utf-8")
     def demo(req: Request, resp: Response):
         try:
             a = int(req.getParam("a"))
@@ -285,6 +303,12 @@ if __name__ == '__main__':
             resp.error("parameter is not number")
             return None
         return "{\"success\":true, \"content\": %d + %d = %d}" % (a, b, a + b)
+
+
+    @httpd.get("/student/:name")
+    def demo(req: Request, resp: Response):
+        name = req.getParam(":name")
+        return "学生名字：" + name
 
 
     httpd.addGetListener("/demo2", demo)
