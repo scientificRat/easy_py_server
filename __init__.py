@@ -86,7 +86,7 @@ class Response:
     def setStatusCode(self, code: int):
         self._status = HTTPStatus(code)
 
-    def error(self, message, status=HTTPStatus.BAD_REQUEST):
+    def error(self, message: str, status=HTTPStatus.BAD_REQUEST):
         self._error_message = message
         self._status = status
 
@@ -125,6 +125,10 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             response = Response()
             try:
                 rtn = listeners_dic[path](request, response)
+                # if error message is set, ignore any return content
+                if response.getErrorMessage() is not None:
+                    self.send_error(response.getStatus(), None, response.getErrorMessage())
+                    return
                 if type(rtn) == str:
                     content = rtn.encode("utf-8")
                 elif type(rtn) == bytes:
@@ -133,9 +137,6 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                     content = bytes(rtn)
             except Exception as e:
                 self.on_exception(e)
-                return
-            if response.getErrorMessage() is not None:
-                self.send_error(response.getStatus(), response.getErrorMessage())
                 return
             self.send_response(response.getStatus())
             self.send_header("Content-type", response.getContentType())
@@ -227,7 +228,7 @@ class EasyServer(HTTPServer):
         self.sessions = {}
         print("Server start at " + address + ":" + str(port))
 
-    def get(self, path, listener: RequestListener):
+    def addGetListener(self, path, listener: RequestListener):
         """
         Set http method GET listener
         :param path:  binding url
@@ -237,7 +238,7 @@ class EasyServer(HTTPServer):
         self.get_listeners[path] = listener
         return self
 
-    def post(self, path, listener):
+    def addPostListener(self, path, listener):
         """
         Set http method POST listener
         :param path:  binding url
@@ -247,18 +248,44 @@ class EasyServer(HTTPServer):
         self.post_listeners[path] = listener
         return self
 
+    def get(self, path, content_type="text/html; charset=utf-8"):
+        def wrapper(listener: RequestListener):
+            def new_listener(request, response):
+                response.setContentType(content_type)
+                return listener(request, response)
+
+            self.addGetListener(path, new_listener)
+            return new_listener
+
+        return wrapper
+
+    def post(self, path, content_type="text/html; charset=utf-8"):
+        def wrapper(listener: RequestListener):
+            def new_listener(request, response):
+                response.setContentType(content_type)
+                return listener(request, response)
+
+            self.addPostListener(path, new_listener)
+            return new_listener
+
+        return wrapper
+
 
 if __name__ == '__main__':
     httpd = EasyServer()
-    httpd.get("/demo1", lambda request, response: "a=" + request.getParam('a'))
+    httpd.addGetListener("/demo1", lambda request, response: "a=" + request.getParam('a'))
 
 
+    @httpd.get("/api")
     def demo(req: Request, resp: Response):
-        a = int(req.getParam("a"))
-        b = int(req.getParam("b"))
-        resp.setContentType("application/json; charset=utf-8")
+        try:
+            a = int(req.getParam("a"))
+            b = int(req.getParam("b"))
+        except ValueError:
+            resp.error("parameter is not number")
+            return None
         return "{\"success\":true, \"content\": %d + %d = %d}" % (a, b, a + b)
 
 
-    httpd.get("/demo2", demo)
+    httpd.addGetListener("/demo2", demo)
     httpd.serve_forever()
