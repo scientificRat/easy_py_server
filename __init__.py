@@ -1,6 +1,6 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler, HTTPStatus
-import os
-import sys
+from typing import Optional, Callable, Dict, Any
+import os, sys
 import re
 import uuid
 import traceback
@@ -40,6 +40,60 @@ extensions_map = {
 }
 
 
+class IllegalAccessException(Exception):
+    pass
+
+
+class Request:
+    def __init__(self, session: dict, param: dict):
+        self._session = session
+        self._param = param
+
+    def getParam(self, key: str) -> str:
+        value = self._param.get(key, None)
+        if value is None:
+            raise IllegalAccessException("Parameter '%s' is required" % (key,))
+        return value
+
+    def getSession(self, key) -> Optional[Any]:
+        return self._session.get(key, None)
+
+    def setSession(self, key, value):
+        self._session[key] = value
+
+
+class Response:
+    def __init__(self):
+        self._content_type = "text/html; charset=utf-8"
+        self._status = HTTPStatus.OK
+        self._error_message = None
+
+    def setContentType(self, content_type: str) -> None:
+        self._content_type = content_type
+
+    def getContentType(self) -> str:
+        return self._content_type
+
+    def setStatus(self, status: HTTPStatus):
+        self._status = status
+
+    def getStatus(self):
+        return self._status
+
+    def setStatusCode(self, code: int):
+        self._status = HTTPStatus(code)
+
+    def error(self, message, status=HTTPStatus.BAD_REQUEST):
+        self._error_message = message
+        self._status = status
+
+    def getErrorMessage(self):
+        return self._error_message
+
+
+RequestListener = Callable[[Request, Response], Any]
+
+
 class EasyServerHandler(BaseHTTPRequestHandler):
     server_version = "EasyServer"
     resource_dir = 'www/'  # !!! must with /
@@ -49,31 +103,39 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def version_string(self):
         return self.server_version
 
-    def on_exception(self):
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        err_list = traceback.format_exception(exc_type, exc_value, exc_traceback, limit=5)
+    def on_exception(self, e):
         e_str = ""
-        for item in err_list:
-            e_str += str(item)
+        if isinstance(e, IllegalAccessException):
+            e_str = str(e)
+        else:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            err_list = traceback.format_exception(exc_type, exc_value, exc_traceback, limit=5)
+            for item in err_list:
+                e_str += str(item)
+
         self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", e_str)
 
-    def find_and_call_api_listener(self, path, param, listeners_dic):
+    def find_and_call_api_listener(self, path: str, param: dict, listeners_dic: Dict[str, RequestListener]):
         if path in listeners_dic:
             session = self.get_session()
+            request = Request(session if session is not None else {}, param)
+            response = Response()
             try:
-                response_type = listeners_dic[path][1]
-                rtn = listeners_dic[path][0](session, param)
+                rtn = listeners_dic[path](request, response)
                 if type(rtn) == str:
                     content = rtn.encode("utf-8")
                 elif type(rtn) == bytes:
                     content = rtn
                 else:
                     content = bytes(rtn)
-            except:
-                self.on_exception()
+            except Exception as e:
+                self.on_exception(e)
                 return
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-type", response_type)
+            if response.getErrorMessage() is not None:
+                self.send_error(response.getStatus(), response.getErrorMessage())
+                return
+            self.send_response(response.getStatus())
+            self.send_header("Content-type", response.getContentType())
             self.send_header("Content-Length", len(content))
             if session is None:
                 self.send_header("Set-Cookie", self.SESSION_COOKIE_NAME + "=" + str(uuid.uuid1()).replace("-", ""))
@@ -83,7 +145,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         else:
             return False
 
-    def get_session(self):
+    def get_session(self) -> Optional[dict]:
         cookie_str = self.headers.get('Cookie', "")
         cookies = re.findall(self.SESSION_COOKIE_NAME + "=([a-zA-Z0-9_-]*)", cookie_str)  # time consuming
         if len(cookies) <= 0:
@@ -154,39 +216,46 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             self.send_error(HTTPStatus.BAD_REQUEST, "Bad Request")
 
 
-class OnRequestListener:
-    def __call__(self, session: dict, parameters: dict):
-        pass
-
-
 class EasyServer(HTTPServer):
-    def __init__(self, address="localhost", port=8090):
+    def __init__(self, port: int = 8090, address: str = "localhost"):
         super().__init__((address, port), EasyServerHandler)
         self.get_listeners = {}
         self.post_listeners = {}
         self.sessions = {}
+        print("Server start at " + address + ":" + str(port))
 
-    def get(self, path, listener: OnRequestListener, response_type="text/html; charset=utf-8"):
+    def get(self, path, listener: RequestListener):
         """
-        :param path: response url
-        :param listener:  func(session, param)  session and param are both dict type
-        :param response_type: response header Content-type value
-        :return: None
+        Set http method GET listener
+        :param path:  binding url
+        :param listener:  func(request: Request, response: Response)-> Any
+        :return: self
         """
-        self.get_listeners[path] = listener, response_type
+        self.get_listeners[path] = listener
+        return self
 
-    def post(self, path, listener: OnRequestListener, response_type="text/html; charset=utf-8"):
+    def post(self, path, listener):
         """
-        :param path: response url
-        :param listener:  func(session, param)  session and param are both dict type
-        :param response_type: response header Content-type value
-        :return: None
+        Set http method POST listener
+        :param path:  binding url
+        :param listener:  func(request: Request, response: Response)-> Any
+        :return: self
         """
-        self.post_listeners[path] = listener, response_type
+        self.post_listeners[path] = listener
+        return self
 
 
 if __name__ == '__main__':
     httpd = EasyServer()
-    httpd.get("/api/test", lambda session, param: "API1: " + param['a'])
-    httpd.post("/api/test2", lambda session, param: "API2: " + param['b'])
+    httpd.get("/demo1", lambda request, response: "a=" + request.getParam('a'))
+
+
+    def demo(req: Request, resp: Response):
+        a = int(req.getParam("a"))
+        b = int(req.getParam("b"))
+        resp.setContentType("application/json; charset=utf8")
+        return "{\"success\":true, \"content\": %d + %d = %d}" % (a, b, a + b)
+
+
+    httpd.get("/demo2", demo)
     httpd.serve_forever()
