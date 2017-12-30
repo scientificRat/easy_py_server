@@ -253,7 +253,7 @@ if __name__ == '__main__':
     def demo(req: Request, resp: Response):
         a = int(req.getParam("a"))
         b = int(req.getParam("b"))
-        resp.setContentType("application/json; charset=utf8")
+        resp.setContentType("application/json; charset=utf-8")
         return "{\"success\":true, \"content\": %d + %d = %d}" % (a, b, a + b)
 
 
