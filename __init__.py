@@ -206,7 +206,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             for index in indexes:
                 if os.path.isfile(path + index):
                     path += index
-        if os.path.isdir(path):  # forbidden to access directors
+        if os.path.isdir(path):
             self.send_error(HTTPStatus.FORBIDDEN, "Request forbidden")
             return
 
