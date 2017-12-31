@@ -114,7 +114,7 @@ class Method(Enum):
 
 class EasyServerHandler(BaseHTTPRequestHandler):
     server_version = "EasyServer"
-    resource_dir = 'www/'  # !!! must with /
+    resource_dir = 'www/'
     SESSION_COOKIE_NAME = "EASY_SESSION_ID"
     error_message_format = ERROR_MESSAGE_FORMAT
 
@@ -126,7 +126,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         if isinstance(e, IllegalAccessException):
             e_str = str(e)
         else:
-            # Fixme: not good implementation
+            # TODO: not good implementation
             exc_type, exc_value, exc_traceback = sys.exc_info()
             err_list = traceback.format_exception(exc_type, exc_value, exc_traceback, limit=5)
             for item in err_list:
@@ -138,6 +138,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         listener = listeners_dic.get((path,), None)
         if listener is None:
             for k in listeners_dic:
+                # TODO: regex should be compiled and cached for better performance
                 match = re.fullmatch(k[0], path)
                 if match is not None:
                     path_param_values = match.groups()
