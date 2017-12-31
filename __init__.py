@@ -1,5 +1,6 @@
 from http.server import HTTPServer, BaseHTTPRequestHandler, HTTPStatus
-from typing import Optional, Callable, Dict, Any
+from typing import Optional, Callable, Dict, Tuple, Any
+from enum import Enum
 import os, sys
 import re
 import uuid
@@ -98,6 +99,19 @@ class Response:
 RequestListener = Callable[[Request, Response], Any]
 
 
+# reference from RFC 7231
+class Method(Enum):
+    GET = 1
+    HEAD = 2
+    POST = 3
+    PUT = 4
+    DELETE = 5
+    CONNECT = 6
+    OPTIONS = 7
+    TRACE = 8
+    PATCH = 9
+
+
 class EasyServerHandler(BaseHTTPRequestHandler):
     server_version = "EasyServer"
     resource_dir = 'www/'  # !!! must with /
@@ -112,6 +126,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         if isinstance(e, IllegalAccessException):
             e_str = str(e)
         else:
+            # Fixme: not good implementation
             exc_type, exc_value, exc_traceback = sys.exc_info()
             err_list = traceback.format_exception(exc_type, exc_value, exc_traceback, limit=5)
             for item in err_list:
@@ -143,7 +158,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                     return
                 if type(rtn) == str:
                     content = rtn.encode("utf-8")
-                elif type(rtn) == bytes:
+                elif type(rtn) == bytes or rtn is None:
                     content = rtn
                 else:
                     content = bytes(rtn)
@@ -178,138 +193,132 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             param[item[1]] = urllib.parse.unquote(item[2])
         return param
 
+    @staticmethod
+    def parse_url_path(path) -> Tuple[str, Dict[str, str]]:
+        row = path.split('?')
+        param = {} if len(row) < 2 else EasyServerHandler.parse_parameter(row[1])
+        return row[0], param
+
+    def deal_static_file_request(self, path):
+        path = self.resource_dir + path[1:]
+        if len(path) == 0 or path[-1] == '/':
+            indexes = ["index.html", "index.htm"]
+            for index in indexes:
+                if os.path.isfile(path + index):
+                    path += index
+        if os.path.isdir(path):  # forbidden to access directors
+            self.send_error(HTTPStatus.FORBIDDEN, "Request forbidden")
+            return
+
+        postfix = path.split('.')[-1].lower()
+        default_type = 'application/octet-stream'
+        content_type = default_type if len(postfix) == len(path) else extensions_map.get(postfix, default_type)
+        try:
+            f = open(path, 'rb')
+        except OSError:
+            self.send_error(HTTPStatus.NOT_FOUND, "Not found")
+            return
+        try:
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-type", content_type)
+            fs = os.fstat(f.fileno())
+            self.send_header("Content-Length", str(fs[6]))
+            self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
+            self.end_headers()
+            while 1:
+                buf = f.read(1024 * 16)
+                if not buf:
+                    break
+                self.wfile.write(buf)
+            return
+        except:
+            self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error")
+        finally:
+            f.close()
+
     def do_GET(self):
         # 解析并分离URL参数
-        row = self.path.split('?')
-        param = {} if len(row) < 2 else self.parse_parameter(row[1])
-        path = row[0]
+        path, param = self.parse_url_path(self.path)
         # 首先尝试调用api listener, 如果没有对应的listener则认为是静态资源
-        if not self.find_and_call_api_listener(path, param, self.server.get_listeners):
-            # static resources
-            path = self.resource_dir + path[1:]
-            if len(path) == 0 or path[-1] == '/':
-                indexes = ["index.html", "index.htm"]
-                for index in indexes:
-                    if os.path.isfile(path + index):
-                        path += index
-            if os.path.isdir(path):  # forbidden to access directors
-                self.send_error(HTTPStatus.FORBIDDEN, "Request forbidden")
-                return
-
-            postfix = path.split('.')[-1].lower()
-            default_type = 'application/octet-stream'
-            content_type = default_type if len(postfix) == len(path) else extensions_map.get(postfix, default_type)
-            try:
-                f = open(path, 'rb')
-            except OSError:
-                self.send_error(HTTPStatus.NOT_FOUND, "Not found")
-                return
-            try:
-                self.send_response(HTTPStatus.OK)
-                self.send_header("Content-type", content_type)
-                fs = os.fstat(f.fileno())
-                self.send_header("Content-Length", str(fs[6]))
-                self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
-                self.end_headers()
-                while 1:
-                    buf = f.read(1024 * 16)
-                    if not buf:
-                        break
-                    self.wfile.write(buf)
-                return
-            except:
-                self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal Server Error")
-            finally:
-                f.close()
+        if not self.find_and_call_api_listener(path, param, self.server.method_listeners_dic[Method.GET]):
+            self.deal_static_file_request(path)
 
     def do_POST(self):
-        # 忽略'?'后的部分
-        path = self.path.split('?')[0]
+        path, param = self.parse_url_path(self.path)
         request_len = int(self.headers.get("Content-Length", 0))
         data = self.rfile.read(request_len)
-        param = {} if data is None else self.parse_parameter(bytes.decode(data))
-        if not self.find_and_call_api_listener(path, param, self.server.post_listeners):
+        param += {} if data is None else self.parse_parameter(bytes.decode(data))
+        if not self.find_and_call_api_listener(path, param, self.server.method_listeners_dic[Method.POST]):
             self.send_error(HTTPStatus.BAD_REQUEST, "Bad Request")
 
 
 class EasyServer(HTTPServer):
+    method_listeners_dic = {}
+    for method in Method:
+        method_listeners_dic[method] = {}
+
     def __init__(self, port: int = 8090, address: str = "localhost"):
         super().__init__((address, port), EasyServerHandler)
-        self.get_listeners = {}
-        self.post_listeners = {}
         self.sessions = {}
         print("Server start at " + address + ":" + str(port))
 
-    def addGetListener(self, path, listener: RequestListener):
-        """
-        Set http method GET listener
-        :param path:  binding url
-        :param listener:  func(request: Request, response: Response)-> Any
-        :return: self
-        """
+    @classmethod
+    def addRequestListener(cls, path: str, method: Method, listener: RequestListener):
         path_params = tuple(re.findall("(:[^/]+)", path))
         for parm in path_params:
             path = path.replace(parm, "([^/]+)")
-        self.get_listeners[(path,) + path_params] = listener
-        return self
+        cls.method_listeners_dic[method][(path,) + path_params] = listener
 
-    def addPostListener(self, path, listener):
-        """
-        Set http method POST listener
-        :param path:  binding url
-        :param listener:  func(request: Request, response: Response)-> Any
-        :return: self
-        """
-        path_params = tuple(re.findall("(:[^/]+)", path))
-        for parm in path_params:
-            path = path.replace(parm, "([^/]+)")
-        self.post_listeners[(path,) + path_params] = listener
-        return self
 
-    def get(self, path, content_type="text/html; charset=utf-8"):
-        def wrapper(listener: RequestListener):
+class Httpd(object):
+    server = None
+
+    @classmethod
+    def start_serve(cls, port: int = 8090, address: str = "localhost"):
+        if cls.server is None:
+            cls.server = EasyServer(port, address)
+            cls.server.serve_forever()
+        return cls
+
+    @classmethod
+    def requestMapping(cls, path, methods=[m for m in Method], content_type="text/html; charset=utf-8"):
+        def converter(listener: RequestListener):
             def new_listener(request, response):
                 response.setContentType(content_type)
                 return listener(request, response)
 
-            self.addGetListener(path, new_listener)
+            for m in methods:
+                EasyServer.addRequestListener(path, m, new_listener)
             return new_listener
 
-        return wrapper
+        return converter
 
-    def post(self, path, content_type="text/html; charset=utf-8"):
-        def wrapper(listener: RequestListener):
-            def new_listener(request, response):
-                response.setContentType(content_type)
-                return listener(request, response)
+    @classmethod
+    def get(cls, path, content_type="text/html; charset=utf-8"):
+        return cls.requestMapping(path, [Method.GET], content_type)
 
-            self.addPostListener(path, new_listener)
-            return new_listener
-
-        return wrapper
+    @classmethod
+    def post(cls, path, content_type="text/html; charset=utf-8"):
+        return cls.requestMapping(path, [Method.POST], content_type)
 
 
 if __name__ == '__main__':
-    httpd = EasyServer()
-    httpd.addGetListener("/demo1", lambda request, response: "a=" + request.getParam('a'))
 
-
-    @httpd.get("/api",content_type="application/json; charset=utf-8")
-    def demo(req: Request, resp: Response):
+    @Httpd.get("/api", content_type="application/json; charset=utf-8")
+    def demo(request, response):
         try:
-            a = int(req.getParam("a"))
-            b = int(req.getParam("b"))
+            a = int(request.getParam("a"))
+            b = int(request.getParam("b"))
         except ValueError:
-            resp.error("parameter is not number")
+            response.error("parameter is not number")
             return None
         return "{\"success\":true, \"content\": %d + %d = %d}" % (a, b, a + b)
 
 
-    @httpd.get("/student/:name")
+    @Httpd.get("/student/:name")
     def demo(req: Request, resp: Response):
         name = req.getParam(":name")
         return "学生名字：" + name
 
 
-    httpd.addGetListener("/demo2", demo)
-    httpd.serve_forever()
+    Httpd.start_serve()
