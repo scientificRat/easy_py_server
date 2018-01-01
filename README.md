@@ -3,7 +3,7 @@
 
 * You can simply integrate this server with you code **without** any installation or configuration  
 * Support `static resources`,`HTTP session`,`path parameter` ....
-* Python decrator based API  
+* Python decorator based API  
 * Easy to customize  
 
 ## Get started  
