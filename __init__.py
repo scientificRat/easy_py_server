@@ -48,52 +48,52 @@ class IllegalAccessException(Exception):
 
 class Request:
     def __init__(self, session: dict, param: dict):
-        self._session = session
-        self._param = param
+        self.__session = session
+        self.__params = param
 
     def getParam(self, key: str) -> str:
-        value = self._param.get(key, None)
+        value = self.__params.get(key, None)
         if value is None:
             raise IllegalAccessException("Parameter '%s' is required" % (key,))
         return value
 
     def getSession(self, key) -> Optional[Any]:
-        return self._session.get(key, None)
+        return self.__session.get(key, None)
 
     def removeSession(self, key):
-        self._session.pop(key, None)
+        self.__session.pop(key, None)
 
     def setSession(self, key, value):
-        self._session[key] = value
+        self.__session[key] = value
 
 
 class Response:
     def __init__(self):
-        self._content_type = "text/html; charset=utf-8"
-        self._status = HTTPStatus.OK
-        self._error_message = None
+        self.__content_type = "text/html; charset=utf-8"
+        self.__status = HTTPStatus.OK
+        self.__error_message = None
 
     def setContentType(self, content_type: str) -> None:
-        self._content_type = content_type
+        self.__content_type = content_type
 
     def getContentType(self) -> str:
-        return self._content_type
+        return self.__content_type
 
     def setStatus(self, status: HTTPStatus):
-        self._status = status
+        self.__status = status
 
     def getStatus(self):
-        return self._status
+        return self.__status
 
     def setStatusCode(self, code: int):
-        self._status = HTTPStatus(code)
+        self.__status = HTTPStatus(code)
 
     def error(self, message: str, status=HTTPStatus.BAD_REQUEST):
-        self._error_message = message
-        self._status = status
+        self.__error_message = message
+        self.__status = status
 
     def getErrorMessage(self):
-        return self._error_message
+        return self.__error_message
 
 
 RequestListener = Callable[[Request, Response], Any]
