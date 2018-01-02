@@ -149,7 +149,11 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                         break
         if listener is not None:
             session = self.get_session()
-            request = Request(session if session is not None else {}, param)
+            new_session_key = None
+            if session is None:
+                new_session_key = str(uuid.uuid1()).replace("-", "")
+                session = self.server.sessions[new_session_key] = {}
+            request = Request(session, param)
             response = Response()
             try:
                 rtn = listener(request, response)
@@ -169,8 +173,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             self.send_response(response.getStatus())
             self.send_header("Content-type", response.getContentType())
             self.send_header("Content-Length", len(content))
-            if session is None:
-                self.send_header("Set-Cookie", self.SESSION_COOKIE_NAME + "=" + str(uuid.uuid1()).replace("-", ""))
+            if new_session_key is not None:
+                self.send_header("Set-Cookie", self.SESSION_COOKIE_NAME + "=" + new_session_key + "; path=/;")
             self.end_headers()
             self.wfile.write(content)
             return True
@@ -182,10 +186,10 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         cookies = re.findall(self.SESSION_COOKIE_NAME + "=([a-zA-Z0-9_-]*)", cookie_str)  # time consuming
         if len(cookies) <= 0:
             return None
-        if cookies[0] in self.server.sessions:
-            return self.server.sessions[cookies[0]]
-        else:
-            return None
+        for c in cookies:
+            if c in self.server.sessions:
+                return self.server.sessions.get(c, None)
+        return None
 
     @staticmethod
     def parse_parameter(src_str):
@@ -248,7 +252,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         path, param = self.parse_url_path(self.path)
         request_len = int(self.headers.get("Content-Length", 0))
         data = self.rfile.read(request_len)
-        param += {} if data is None else self.parse_parameter(bytes.decode(data))
+        param_more = {} if data is None else self.parse_parameter(bytes.decode(data))
+        param.update(param_more)
         if not self.find_and_call_api_listener(path, param, self.server.method_listeners_dic[Method.POST]):
             self.send_error(HTTPStatus.BAD_REQUEST, "Bad Request")
 
