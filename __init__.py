@@ -282,8 +282,11 @@ class Httpd(object):
     @classmethod
     def start_serve(cls, port: int = 8090, address: str = "localhost"):
         if cls.server is None:
-            cls.server = EasyServer(port, address)
-            cls.server.serve_forever()
+            try:
+                cls.server = EasyServer(port, address)
+                cls.server.serve_forever()
+            except Exception as e:
+                print(str(e))
         return cls
 
     @classmethod
