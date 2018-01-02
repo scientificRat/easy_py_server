@@ -165,7 +165,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                     content = bytes(rtn)
             except Exception as e:
                 self.on_exception(e)
-                return
+                return True
             self.send_response(response.getStatus())
             self.send_header("Content-type", response.getContentType())
             self.send_header("Content-Length", len(content))
