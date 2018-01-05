@@ -45,16 +45,16 @@ Httpd.start_serve()
 ```
 
 
-#### Create director for static resources(Optional)  
+#### Create directory for static resources(Optional)  
 ```bash
 mkdir www 
-# ... add some files into this director
+# ... add some files into this directory
 ```
 
 #### Run and have fun :)
 ```bash
 python3 your-source.py
-# your 'www' director should be in the same director of 'your-source.py' 
+# your 'www' directory should be in the same directory of 'your-source.py' 
 ```
 
 ## Documentation
