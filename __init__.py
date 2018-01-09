@@ -48,52 +48,52 @@ class IllegalAccessException(Exception):
 
 class Request:
     def __init__(self, session: dict, param: dict):
-        self._session = session
-        self._param = param
+        self.__session = session
+        self.__params = param
 
     def getParam(self, key: str) -> str:
-        value = self._param.get(key, None)
+        value = self.__params.get(key, None)
         if value is None:
             raise IllegalAccessException("Parameter '%s' is required" % (key,))
         return value
 
     def getSession(self, key) -> Optional[Any]:
-        return self._session.get(key, None)
+        return self.__session.get(key, None)
 
     def removeSession(self, key):
-        self._session.pop(key, None)
+        self.__session.pop(key, None)
 
     def setSession(self, key, value):
-        self._session[key] = value
+        self.__session[key] = value
 
 
 class Response:
     def __init__(self):
-        self._content_type = "text/html; charset=utf-8"
-        self._status = HTTPStatus.OK
-        self._error_message = None
+        self.__content_type = "text/html; charset=utf-8"
+        self.__status = HTTPStatus.OK
+        self.__error_message = None
 
     def setContentType(self, content_type: str) -> None:
-        self._content_type = content_type
+        self.__content_type = content_type
 
     def getContentType(self) -> str:
-        return self._content_type
+        return self.__content_type
 
     def setStatus(self, status: HTTPStatus):
-        self._status = status
+        self.__status = status
 
     def getStatus(self):
-        return self._status
+        return self.__status
 
     def setStatusCode(self, code: int):
-        self._status = HTTPStatus(code)
+        self.__status = HTTPStatus(code)
 
     def error(self, message: str, status=HTTPStatus.BAD_REQUEST):
-        self._error_message = message
-        self._status = status
+        self.__error_message = message
+        self.__status = status
 
     def getErrorMessage(self):
-        return self._error_message
+        return self.__error_message
 
 
 RequestListener = Callable[[Request, Response], Any]
@@ -149,7 +149,11 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                         break
         if listener is not None:
             session = self.get_session()
-            request = Request(session if session is not None else {}, param)
+            new_session_key = None
+            if session is None:
+                new_session_key = str(uuid.uuid1()).replace("-", "")
+                session = self.server.sessions[new_session_key] = {}
+            request = Request(session, param)
             response = Response()
             try:
                 rtn = listener(request, response)
@@ -165,12 +169,12 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                     content = bytes(rtn)
             except Exception as e:
                 self.on_exception(e)
-                return
+                return True
             self.send_response(response.getStatus())
             self.send_header("Content-type", response.getContentType())
             self.send_header("Content-Length", len(content))
-            if session is None:
-                self.send_header("Set-Cookie", self.SESSION_COOKIE_NAME + "=" + str(uuid.uuid1()).replace("-", ""))
+            if new_session_key is not None:
+                self.send_header("Set-Cookie", self.SESSION_COOKIE_NAME + "=" + new_session_key + "; path=/;")
             self.end_headers()
             self.wfile.write(content)
             return True
@@ -182,10 +186,10 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         cookies = re.findall(self.SESSION_COOKIE_NAME + "=([a-zA-Z0-9_-]*)", cookie_str)  # time consuming
         if len(cookies) <= 0:
             return None
-        if cookies[0] in self.server.sessions:
-            return self.server.sessions[cookies[0]]
-        else:
-            return None
+        for c in cookies:
+            if c in self.server.sessions:
+                return self.server.sessions.get(c, None)
+        return None
 
     @staticmethod
     def parse_parameter(src_str):
@@ -248,7 +252,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         path, param = self.parse_url_path(self.path)
         request_len = int(self.headers.get("Content-Length", 0))
         data = self.rfile.read(request_len)
-        param += {} if data is None else self.parse_parameter(bytes.decode(data))
+        param_more = {} if data is None else self.parse_parameter(bytes.decode(data))
+        param.update(param_more)
         if not self.find_and_call_api_listener(path, param, self.server.method_listeners_dic[Method.POST]):
             self.send_error(HTTPStatus.BAD_REQUEST, "Bad Request")
 
@@ -277,8 +282,11 @@ class Httpd(object):
     @classmethod
     def start_serve(cls, port: int = 8090, address: str = "localhost"):
         if cls.server is None:
-            cls.server = EasyServer(port, address)
-            cls.server.serve_forever()
+            try:
+                cls.server = EasyServer(port, address)
+                cls.server.serve_forever()
+            except Exception as e:
+                print(str(e))
         return cls
 
     @classmethod
