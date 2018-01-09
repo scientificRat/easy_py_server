@@ -4,3 +4,4 @@ www/*
 !www/index.html
 .idea
 __pycache__
+build/
