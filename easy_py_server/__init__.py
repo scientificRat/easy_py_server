@@ -279,11 +279,13 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         request_len = int(self.headers.get("Content-Length", 0))
         request_type = self.headers.get("Content-Type", None)
         body = self.rfile.read(request_len)
-        print(request_type)
-        param_more = None
-        if re.match("application/x-www-form-urlencoded", request_type) is not None:
-            param_more = self.parse_parameter(bytes.decode(body))
-        # todo
+        param_more = {}
+        if request_type is not None:
+            if re.match("application/x-www-form-urlencoded", request_type) is not None:
+                param_more = self.parse_parameter(bytes.decode(body))
+            elif re.match("multipart/form-data", request_type) is not None:
+                # todo
+                pass
         return body, param_more
 
     def do_GET(self):
@@ -295,11 +297,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path, param = self.parse_url_path(self.path)
-        request_len = int(self.headers.get("Content-Length", 0))
-        data = self.rfile.read(request_len)
-        # todo: deal content data
-        print(self.headers.get("Content-Type", None))
-        param_more = {} if data is None else self.parse_parameter(bytes.decode(data))
+        body, param_more = self.parse_request_body()
         param.update(param_more)
         if not self.find_and_call_api_listener(path, param, Method.POST):
             self.send_error(HTTPStatus.NOT_FOUND)

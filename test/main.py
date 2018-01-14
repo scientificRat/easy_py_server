@@ -31,4 +31,10 @@ def q(request, response):
     return "get：" + str(curr)
 
 
+@Httpd.post("/w")
+def w(request, response):
+    t = request.getParam("t")
+    return str(t)
+
+
 Httpd.start_serve()
