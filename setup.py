@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(name='easy_py_server',
-      version='1.1',
+      version='1.2',
       description='A simple and easy python web framework',
       author='scientificRat',
       author_email='huangzhengyue.1996@gmail.com',

@@ -6,7 +6,7 @@ import re
 import uuid
 import traceback
 import urllib.parse
-import sched, time, threading, datetime
+import time, threading, datetime
 
 __all__ = ["IllegalAccessException", "Request", "Response", "RequestListener", "Method", "Httpd"]
 
@@ -207,9 +207,12 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         new_session_code = str(uuid.uuid1()).replace("-", "")
         while new_session_code in self.server.sessions:
             new_session_code = str(uuid.uuid1()).replace("-", "")
-        s = sched.scheduler(time.time, time.sleep)
-        s.enter(self.DEFAULT_SESSION_EXPIRE_SECONDS, 1, lambda: self.server.sessions.pop(new_session_code))
-        s.run(blocking=False)
+
+        def clean_expire_session():
+            time.sleep(self.DEFAULT_SESSION_EXPIRE_SECONDS)
+            self.server.sessions.pop(new_session_code)
+
+        threading.Thread(target=clean_expire_session).start()
         self.server.sessions[new_session_code] = session
         expire_date = self.date_time_string(time.time() + self.DEFAULT_SESSION_EXPIRE_SECONDS)
         set_cookie_str = self.SESSION_COOKIE_NAME + "=" + new_session_code + "; path=/; expires=" + expire_date

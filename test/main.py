@@ -28,7 +28,7 @@ def set(request, response):
 @Httpd.get("/q")
 def q(request, response):
     curr = request.getSessionAttribute("curr")
-    return "get：" + curr
+    return "get：" + str(curr)
 
 
 Httpd.start_serve()
