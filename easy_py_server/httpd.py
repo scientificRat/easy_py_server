@@ -1,4 +1,4 @@
-from .new_server import EasyServer
+from .server import EasyServer
 from .datastruct import *
 import threading
 
