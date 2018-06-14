@@ -1,6 +1,7 @@
 from http.server import (HTTPServer, BaseHTTPRequestHandler)
 from typing import (Tuple, Sequence)
 from .datastruct import *
+from .exception import *
 import inspect
 
 import os, sys
@@ -13,7 +14,7 @@ import time, threading, datetime
 
 class EasyServerHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
-    server_version = "EasyServer/0.2.1"
+    server_version = "EasyServer/0.9.1"
     resource_dir = 'www/'
     error_message_format = """<!DOCTYPE html>
     <html>
@@ -21,7 +22,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
             <title>Error Page</title>
         </head>
-        <body>
+        <body style='font-family:sans-serif'>
+            <h1 style='background: #646;color:#fff;margin: 0px;padding: 10px;font-family: cursive,sans-serif;'>EasyPyServer</h1>
             <h1>%(code)d %(message)s</h1><p>Error code explanation: <b>%(code)s</b> </p>details: <br><pre>%(explain)s</pre>
         </body>
     </html>
@@ -53,7 +55,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def version_string(self):
         return self.server_version
 
-    def on_exception(self, e):
+    def on_internal_exception(self, e):
         e_str = ""
         if isinstance(e, IllegalAccessException):
             e_str = str(e)
@@ -67,13 +69,13 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, None, e_str)
 
     # fixme: I need a better function name
-    def generate_pass_parameter_list(self, listener, session, request_param):
+    def generate_pass_parameter_list(self, listener, session, request_param_dic):
         request, response = None, None
         pass_param_list = []
         for name, parameter in inspect.signature(listener).parameters.items():
             # session and something
             if parameter.annotation == Request:
-                request = Request(session, request_param)
+                request = Request(session, request_param_dic)
                 pass_param_list.append(request)
                 continue
             elif parameter.annotation == Response:
@@ -82,27 +84,26 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 continue
             # todo: I hope to add `httpSession`
             # request parameters
-            if name not in request_param:
-                if ":" + name in request_param:
-                    value = request_param[":" + name]
+            if name not in request_param_dic:
+                if ":" + name in request_param_dic:
+                    value = request_param_dic[":" + name]
                 elif parameter.default != inspect.Parameter.empty:
                     value = parameter.default
                 else:
-                    self.send_error(HTTPStatus.BAD_REQUEST, "parameter '%s' is empty" % name)
-                    return True
+                    raise HttpException(HTTPStatus.BAD_REQUEST, "parameter '%s' is empty" % name)
             else:
-                value = request_param[name]
+                value = request_param_dic[name]
             if parameter.annotation != inspect.Parameter.empty:
                 tp = parameter.annotation
                 # todo: parse json and file
                 try:
                     value = tp(value)
                 except Exception as e:
-                    self.on_exception(e)
+                    raise InternalException(e, "type converting error")
             pass_param_list.append(value)
         return pass_param_list, request, response
 
-    def find_and_call_api_listener(self, path: str, param: dict, method: Method):
+    def find_listener(self, path: str, param: dict, method: Method):
         listeners_dic = self.server.listeners_dic
         entity = listeners_dic.get(path, None)
         # if has path parameters, the key will be the regular expression not the raw path
@@ -118,43 +119,58 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                         entity = listeners_dic[k]
                         break
         if entity is None:
-            return False
+            return None
         listener, methods, _ = entity
         if listener is not None:
             if method not in methods:
-                self.send_error(HTTPStatus.METHOD_NOT_ALLOWED)
-                return True
-            session = self.get_session()
-            current_none_session = session is None
-            pass_param_list, request, response = self.generate_pass_parameter_list(listener, session, param)
-            try:
-                # call the listener
-                rtn = listener(*pass_param_list)
-                # if error message is set, ignore any return content
-                if response is not None and response.getErrorMessage() is not None:
-                    self.send_error(response.getStatus(), None, response.getErrorMessage())
-                    return True
-                if type(rtn) == str:
-                    content = rtn.encode("utf-8")
-                elif type(rtn) == bytes or rtn is None:
-                    content = rtn
-                else:
-                    content = bytes(rtn)
-            except Exception as e:
-                self.on_exception(e)
-                return True
-            if response is None:
-                response = Response()
+                raise HttpException(HTTPStatus.METHOD_NOT_ALLOWED)
+            return listener
+
+    def call_listener(self, listener, param):
+        session = self.get_session()
+        current_none_session = session is None
+        pass_param_list, request, response = self.generate_pass_parameter_list(listener, session, param)
+        try:
+            # call the listener
+            rtn = listener(*pass_param_list)
+            content = self.convert_rtn(rtn)
+        except Exception as e:
+            raise InternalException(e)
+        if response is None:
+            response = Response()
+        if current_none_session and request is not None and request.getSession() is not None:
+            response.setNewSession(request.getSession())
+        response.setContent(content)
+        return response
+
+    def convert_rtn(self, rtn):
+        # todo: may allowed json object
+        if type(rtn) == str:
+            content = rtn.encode("utf-8")
+        elif type(rtn) == bytes or rtn is None:
+            content = rtn
+        else:
+            content = bytes(rtn)
+        return content
+
+    def make_response(self, response: Response):
+        # if error message is set, ignore any return content
+        if response.getErrorMessage() is not None:
+            self.send_error(response.getStatus(), None, response.getErrorMessage())
+        else:
             self.send_response(response.getStatus())
             self.send_header("Content-type", response.getContentType())
-            self.send_header("Content-Length", len(content))
-            if current_none_session and request is not None and request.getSession() is not None:
-                self.set_new_session_cookie(request.getSession())
+            self.send_header("Content-Length", len(response.getContent()))
+            if response.getNewSession() is not None:
+                self.set_new_session_cookie(response.getNewSession())
             self.end_headers()
-            self.wfile.write(content)
-            return True
+            self.wfile.write(response.getContent())
+
+    def deal_http_exception(self, e):
+        if isinstance(e, InternalException):
+            self.on_internal_exception(e)
         else:
-            return False
+            self.send_error(e.http_status, None, e.info)
 
     def get_session(self) -> Optional[dict]:
         cookie_str = self.headers.get('Cookie', "")
@@ -183,6 +199,10 @@ class EasyServerHandler(BaseHTTPRequestHandler):
 
     def deal_static_file_request(self, path):
         path = self.resource_dir + path[1:]
+        # for security
+        if len(re.findall('(/../)', path)) != 0:
+            self.send_error(HTTPStatus.FORBIDDEN)
+            return
         if len(path) == 0 or path[-1] == '/':
             indexes = ["index.html", "index.htm"]
             for index in indexes:
@@ -253,18 +273,32 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         return body, param_more
 
     def do_GET(self):
-        # 解析并分离URL参数
+        # parse and separate request url
         path, param = self.parse_url_path(self.path)
-        # 首先尝试调用api listener, 如果没有对应的listener则认为是静态资源
-        if not self.find_and_call_api_listener(path, param, Method.GET):
-            self.deal_static_file_request(path)
+        # find listener. request will be regarded as static resource if no listener existed
+        try:
+            listener = self.find_listener(path, param, Method.GET)
+            if listener is None:
+                self.deal_static_file_request(path)
+            else:
+                response = self.call_listener(listener, param)
+                self.make_response(response)
+        except HttpException as e:
+            self.deal_http_exception(e)
 
     def do_POST(self):
         path, param = self.parse_url_path(self.path)
         body, param_more = self.parse_request_body()
         param.update(param_more)
-        if not self.find_and_call_api_listener(path, param, Method.POST):
-            self.send_error(HTTPStatus.NOT_FOUND)
+        try:
+            listener = self.find_listener(path, param, Method.POST)
+            if listener is None:
+                raise HttpException(HTTPStatus.NOT_FOUND)
+            else:
+                response = self.call_listener(listener, param)
+                self.make_response(response)
+        except HttpException as e:
+            self.deal_http_exception(e)
 
     def do_HEAD(self):
         pass
@@ -280,7 +314,7 @@ class EasyServer(HTTPServer):
 
     @classmethod
     def addRequestListener(cls, path: str, methods: Sequence[Method], listener: RequestListener):
-        path_params = tuple(re.findall("(:[^/]+)", path))
+        path_params = re.findall("(:[^/]+)", path)
         for parm in path_params:
             path = path.replace(parm, "([^/]+)")
         if len(path_params) != 0:

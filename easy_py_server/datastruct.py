@@ -35,6 +35,8 @@ class Response:
         self.__content_type = "text/html; charset=utf-8"
         self.__status = HTTPStatus.OK
         self.__error_message = None
+        self.__content = None
+        self.__new_session = None
 
     def setContentType(self, content_type: str) -> None:
         self.__content_type = content_type
@@ -51,6 +53,18 @@ class Response:
     def setStatusCode(self, code: int):
         self.__status = HTTPStatus(code)
 
+    def setContent(self, content: Any):
+        self.__content = content
+
+    def getContent(self):
+        return self.__content
+
+    def setNewSession(self, session):
+        self.__new_session = session
+
+    def getNewSession(self):
+        return self.__new_session
+
     def error(self, message: str, status=HTTPStatus.BAD_REQUEST):
         self.__error_message = message
         self.__status = status
@@ -60,6 +74,11 @@ class Response:
 
 
 RequestListener = Callable[[Request, Response], Any]
+
+
+class RequestListenerEntity(object):
+    def __init__(self, listener: Callable):
+        self.listener = listener
 
 
 # reference from RFC 7231
