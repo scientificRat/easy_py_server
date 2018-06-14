@@ -28,4 +28,5 @@ def w(t):
     return str(t)
 
 
-httpd.start_serve()
+if __name__ == '__main__':
+    httpd.start_serve()

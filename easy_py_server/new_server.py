@@ -66,6 +66,42 @@ class EasyServerHandler(BaseHTTPRequestHandler):
 
         self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, None, e_str)
 
+    # fixme: I need a better function name
+    def generate_pass_parameter_list(self, listener, session, request_param):
+        request, response = None, None
+        pass_param_list = []
+        for name, parameter in inspect.signature(listener).parameters.items():
+            # session and something
+            if parameter.annotation == Request:
+                request = Request(session, request_param)
+                pass_param_list.append(request)
+                continue
+            elif parameter.annotation == Response:
+                response = Response()
+                pass_param_list.append(response)
+                continue
+            # todo: I hope to add `httpSession`
+            # request parameters
+            if name not in request_param:
+                if ":" + name in request_param:
+                    value = request_param[":" + name]
+                elif parameter.default != inspect.Parameter.empty:
+                    value = parameter.default
+                else:
+                    self.send_error(HTTPStatus.BAD_REQUEST, "parameter '%s' is empty" % name)
+                    return True
+            else:
+                value = request_param[name]
+            if parameter.annotation != inspect.Parameter.empty:
+                tp = parameter.annotation
+                # todo: parse json and file
+                try:
+                    value = tp(value)
+                except Exception as e:
+                    self.on_exception(e)
+            pass_param_list.append(value)
+        return pass_param_list, request, response
+
     def find_and_call_api_listener(self, path: str, param: dict, method: Method):
         listeners_dic = self.server.listeners_dic
         entity = listeners_dic.get(path, None)
@@ -89,44 +125,10 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 self.send_error(HTTPStatus.METHOD_NOT_ALLOWED)
                 return True
             session = self.get_session()
-            current_none_session = False
-            if session is None:
-                current_none_session = True
-            request, response = None, None
-            import inspect
-            pass_param_list = []
-
-            for name, parameter in inspect.signature(listener).parameters.items():
-                # session and something
-                if parameter.annotation == Request:
-                    request = Request(session, param)
-                    pass_param_list.append(request)
-                    continue
-                elif parameter.annotation == Response:
-                    response = Response()
-                    pass_param_list.append(response)
-                    continue
-                # todo: I hope to add `httpSession`
-                # request parameters
-                if name not in param:
-                    if ":" + name in param:
-                        value = param[":" + name]
-                    elif parameter.default != inspect.Parameter.empty:
-                        value = parameter.default
-                    else:
-                        self.send_error(HTTPStatus.BAD_REQUEST, "parameter '%s' is empty" % name)
-                        return True
-                else:
-                    value = param[name]
-                if parameter.annotation != inspect.Parameter.empty:
-                    tp = parameter.annotation
-                    # todo: parse json and file
-                    try:
-                        value = tp(value)
-                    except Exception as e:
-                        self.on_exception(e)
-                pass_param_list.append(value)
+            current_none_session = session is None
+            pass_param_list, request, response = self.generate_pass_parameter_list(listener, session, param)
             try:
+                # call the listener
                 rtn = listener(*pass_param_list)
                 # if error message is set, ignore any return content
                 if response is not None and response.getErrorMessage() is not None:
@@ -243,6 +245,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         param_more = {}
         if request_type is not None:
             if re.match("application/x-www-form-urlencoded", request_type) is not None:
+                # todo
                 param_more = self.parse_parameter(bytes.decode(body))
             elif re.match("multipart/form-data", request_type) is not None:
                 # todo
@@ -283,6 +286,3 @@ class EasyServer(HTTPServer):
         if len(path_params) != 0:
             path = re.compile(path)
         cls.listeners_dic[path] = (listener, methods, path_params)
-
-        #
-        # cls.listeners_dic[path] = (listener, parameters)
