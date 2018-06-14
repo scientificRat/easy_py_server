@@ -1,0 +1,2 @@
+class IllegalAccessException(Exception):
+    pass

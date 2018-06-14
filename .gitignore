@@ -3,5 +3,6 @@
 test/www/*
 !test/www/index.html
 .idea
+try.*
 __pycache__
 build/
