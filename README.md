@@ -84,7 +84,7 @@ from easy_py_server import httpd, Method, Request, Response
 You can bind request by adding decorator `@requestMapping` before your bindding function definition
 
 ```python
-@Httpd.requestMapping(path="/path/to/your/api",methods=[Method.GET],content_type="text/plain")
+@httpd.requestMapping(path="/path/to/your/api",methods=[Method.GET],content_type="text/plain")
 def f(request:Request,response:Response):
     pass
 ```
