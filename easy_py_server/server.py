@@ -10,6 +10,7 @@ import uuid
 import traceback
 import urllib.parse
 import time, threading, datetime
+import json
 
 
 class EasyServerHandler(BaseHTTPRequestHandler):
@@ -82,7 +83,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 response = Response()
                 pass_param_list.append(response)
                 continue
-            # todo: I hope to add `httpSession`
+            # TODO: I hope to add `httpSession`
             # request parameters
             if name not in request_param_dic:
                 if ":" + name in request_param_dic:
@@ -95,7 +96,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 value = request_param_dic[name]
             if parameter.annotation != inspect.Parameter.empty:
                 tp = parameter.annotation
-                # todo: parse json and file
+                # TODO: parse json and file
                 try:
                     value = tp(value)
                 except Exception as e:
@@ -147,6 +148,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         # todo: may allowed json object
         if type(rtn) == str:
             content = rtn.encode("utf-8")
+        elif type(rtn) == dict:
+            content = json.dumps(rtn)
         elif type(rtn) == bytes or rtn is None:
             content = rtn
         else:
@@ -211,7 +214,6 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         if os.path.isdir(path):
             self.send_error(HTTPStatus.FORBIDDEN)
             return
-
         postfix = path.split('.')[-1].lower()
         default_type = 'application/octet-stream'
         content_type = default_type if len(postfix) == len(path) else self.extensions_map.get(postfix, default_type)
@@ -265,10 +267,16 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         param_more = {}
         if request_type is not None:
             if re.match("application/x-www-form-urlencoded", request_type) is not None:
-                # todo
                 param_more = self.parse_parameter(bytes.decode(body))
             elif re.match("multipart/form-data", request_type) is not None:
-                # todo
+                # fixme: fail to parse files
+                boundary = re.findall('boundary=([\S]+)', request_type)
+                if len(boundary) == 1:
+                    boundary = boundary[0]
+                    body_str = bytes.decode(body)
+                    match = re.findall('name="([\S]+)"\r\n\r\n([\s\S]+?)\r\n', body_str)
+                    for k, v in match:
+                        param_more[k] = v
                 pass
         return body, param_more
 

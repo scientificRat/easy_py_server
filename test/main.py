@@ -1,9 +1,10 @@
 from easy_py_server import httpd, Request, Response
+import json
 
 
 @httpd.get("/api", content_type="application/json; charset=utf-8")
 def demo(a: int, b: int):
-    return "{\"success\":true, \"content\": \"%d + %d = %d\"}" % (a, b, a + b)
+    return json.dumps({"success": True, "content": "%d + %d = %d" % (a, b, a + b)})
 
 
 @httpd.get("/student/:name")
