@@ -2,32 +2,38 @@ from easy_py_server import httpd, Request, Response
 import json
 
 
+# get method
 @httpd.get("/api", content_type="application/json; charset=utf-8")
 def demo(a: int, b: int):
     return json.dumps({"success": True, "content": "%d + %d = %d" % (a, b, a + b)})
 
 
-@httpd.get("/student/:name")
-def demo(name):
-    return "学生名字：" + name
+# path parameter
+@httpd.get("/api/:id")
+def demo(id):
+    return 'api ' + id
 
 
-@httpd.get("/set/:curr")
-def set(request: Request, curr):
-    request.setSessionAttribute("curr", curr)
-    return "set：" + str(curr)
+# set session
+@httpd.get("/set/:data")
+def set(request: Request, data):
+    request.setSessionAttribute("data", data)
+    return "set: " + str(data)
 
 
-@httpd.get("/q")
-def q(request: Request):
-    curr = request.getSessionAttribute("curr")
-    return "get：" + str(curr)
+# read session
+@httpd.get("/query")
+def query(request: Request):
+    data = request.getSessionAttribute("data")
+    return "get: " + str(data)
 
 
-@httpd.post("/w")
-def w(t):
-    return str(t)
+# post method
+@httpd.post("/post")
+def post(key):
+    return str(key)
 
 
 if __name__ == '__main__':
+    # start the server (default listen on port 8090) (blocking)
     httpd.start_serve()
