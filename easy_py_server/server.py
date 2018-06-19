@@ -14,7 +14,7 @@ import json
 
 
 class EasyServerHandler(BaseHTTPRequestHandler):
-    protocol_version = "HTTP/1.0"
+    protocol_version = "HTTP/1.1"
     server_version = "EasyServer/0.9.1"
     resource_dir = 'www/'
     error_message_format = """<!DOCTYPE html>
@@ -55,6 +55,14 @@ class EasyServerHandler(BaseHTTPRequestHandler):
 
     def version_string(self):
         return self.server_version
+
+    def handle(self):
+        """
+        override to support http1.1
+        `while loop` may course blocking (which is not allowed in select/poll IO model)
+        """
+        self.close_connection = True
+        self.handle_one_request()
 
     def on_internal_exception(self, e):
         e_str = ""
