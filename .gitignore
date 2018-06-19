@@ -1,7 +1,5 @@
 .DS_Store
 */DS_Store
-demo/www/*
-!demo/www/index.html
 .idea
 try.*
 __pycache__
