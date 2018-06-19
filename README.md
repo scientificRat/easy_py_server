@@ -22,7 +22,7 @@ import json
 
 
 # get method
-@httpd.get("/api", content_type="application/json; charset=utf-8")
+@httpd.get("/api")
 def demo(a: int, b: int):
     return json.dumps({"success": True, "content": "%d + %d = %d" % (a, b, a + b)})
 
@@ -55,6 +55,7 @@ def post(key):
 
 if __name__ == '__main__':
     # start the server (default listen on port 8090) (blocking)
+    Response.DEFAULT_CONTENT_TYPE = "application/json; charset=utf-8"
     httpd.start_serve()
 
 
