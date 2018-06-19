@@ -20,7 +20,7 @@ def start_serve(port: int = 8090, address: str = "0.0.0.0", blocking=True):
             print(str(e))
 
 
-def requestMapping(path, methods=[m for m in Method], content_type="text/html; charset=utf-8"):
+def requestMapping(path, methods=[m for m in Method]):
     def converter(listener):
         EasyServer.addRequestListener(path, methods, listener)
         return listener
@@ -28,9 +28,9 @@ def requestMapping(path, methods=[m for m in Method], content_type="text/html; c
     return converter
 
 
-def get(path, content_type="text/html; charset=utf-8"):
-    return requestMapping(path, [Method.GET], content_type)
+def get(path):
+    return requestMapping(path, [Method.GET])
 
 
-def post(path, content_type="text/html; charset=utf-8"):
-    return requestMapping(path, [Method.POST], content_type)
+def post(path):
+    return requestMapping(path, [Method.POST])

@@ -1,7 +1,7 @@
 from http.server import HTTPStatus
-from typing import Optional, Callable, Dict, Any
+from typing import (Optional, Dict, Any)
 from enum import Enum
-from .exception import *
+from .exception import IllegalAccessException
 
 
 class Request:
@@ -31,8 +31,11 @@ class Request:
 
 
 class Response:
-    def __init__(self):
-        self.__content_type = "text/html; charset=utf-8"
+    DEFAULT_CONTENT_TYPE = "text/html; charset=utf-8"
+
+    def __init__(self, content=None, content_type=None):
+        self.__content = content
+        self.__content_type = content_type
         self.__status = HTTPStatus.OK
         self.__error_message = None
         self.__content = None
@@ -42,7 +45,7 @@ class Response:
         self.__content_type = content_type
 
     def getContentType(self) -> str:
-        return self.__content_type
+        return self.__content_type if self.__content_type is not None else self.DEFAULT_CONTENT_TYPE
 
     def setStatus(self, status: HTTPStatus):
         self.__status = status
@@ -71,14 +74,6 @@ class Response:
 
     def getErrorMessage(self):
         return self.__error_message
-
-
-RequestListener = Callable[[Request, Response], Any]
-
-
-class RequestListenerEntity(object):
-    def __init__(self, listener: Callable):
-        self.listener = listener
 
 
 # reference from RFC 7231

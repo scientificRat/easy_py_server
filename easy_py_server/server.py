@@ -12,10 +12,12 @@ import urllib.parse
 import time, threading, datetime
 import json
 
+__version__ = "0.9.2"
+
 
 class EasyServerHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
-    server_version = "EasyServer/0.9.1"
+    server_version = "EasyServer/" + __version__
     resource_dir = 'www/'
     error_message_format = """<!DOCTYPE html>
     <html>
@@ -87,10 +89,6 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 request = Request(session, request_param_dic)
                 pass_param_list.append(request)
                 continue
-            elif parameter.annotation == Response:
-                response = Response()
-                pass_param_list.append(response)
-                continue
             # TODO: I hope to add `httpSession`
             # request parameters
             if name not in request_param_dic:
@@ -99,7 +97,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 elif parameter.default != inspect.Parameter.empty:
                     value = parameter.default
                 else:
-                    raise HttpException(HTTPStatus.BAD_REQUEST, "parameter '%s' is empty" % name)
+                    raise HttpException(HTTPStatus.BAD_REQUEST, "parameter '%s' is required" % name)
             else:
                 value = request_param_dic[name]
             if parameter.annotation != inspect.Parameter.empty:
@@ -110,7 +108,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 except Exception as e:
                     raise InternalException(e, "type converting error")
             pass_param_list.append(value)
-        return pass_param_list, request, response
+        return pass_param_list, request
 
     def find_listener(self, path: str, param: dict, method: Method):
         listeners_dic = self.server.listeners_dic
@@ -138,31 +136,35 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def call_listener(self, listener, param):
         session = self.get_session()
         current_none_session = session is None
-        pass_param_list, request, response = self.generate_pass_parameter_list(listener, session, param)
+        pass_param_list, request = self.generate_pass_parameter_list(listener, session, param)
         try:
             # call the listener
             rtn = listener(*pass_param_list)
-            content = self.convert_rtn(rtn)
+            response = self.convert_rtn(rtn)
+            if current_none_session and request is not None and request.getSession() is not None:
+                response.setNewSession(request.getSession())
+            return response
         except Exception as e:
             raise InternalException(e)
-        if response is None:
-            response = Response()
-        if current_none_session and request is not None and request.getSession() is not None:
-            response.setNewSession(request.getSession())
-        response.setContent(content)
-        return response
 
     def convert_rtn(self, rtn):
-        # todo: may allowed json object
-        if type(rtn) == str:
-            content = rtn.encode("utf-8")
-        elif type(rtn) == dict:
-            content = json.dumps(rtn)
-        elif type(rtn) == bytes or rtn is None:
-            content = rtn
+        if type(rtn) != Response:
+            response = Response()
+            response.setContent(rtn)
         else:
-            content = bytes(rtn)
-        return content
+            response = rtn
+        origin_content = response.getContent()
+        # todo: may allowed json object
+        if type(origin_content) == str:
+            response.setContent(origin_content.encode('utf-8'))
+        elif type(origin_content) == dict:
+            response.setContent(json.dumps(origin_content))
+            response.setContentType('application/json; charset=utf-8')
+        elif type(origin_content) == bytes or origin_content is None:
+            response.setContentType('application/octet-stream')
+        else:
+            response.setContent(bytes(origin_content))
+        return response
 
     def make_response(self, response: Response):
         # if error message is set, ignore any return content
@@ -329,7 +331,7 @@ class EasyServer(HTTPServer):
         print("[%s] server start at %s:%s" % (datetime.datetime.now().ctime(), address, str(port)))
 
     @classmethod
-    def addRequestListener(cls, path: str, methods: Sequence[Method], listener: RequestListener):
+    def addRequestListener(cls, path: str, methods: Sequence[Method], listener):
         path_params = re.findall("(:[^/]+)", path)
         for parm in path_params:
             path = path.replace(parm, "([^/]+)")
