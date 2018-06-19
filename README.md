@@ -12,7 +12,7 @@
 
 #### Install
 ```bash
-pip3 install git+https://github.com/scientificRat/easy_py_server.git@new_version
+pip3 install git+https://github.com/scientificRat/easy_py_server.git
 ```
 
 #### Demo
