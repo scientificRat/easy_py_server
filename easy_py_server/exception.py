@@ -1,4 +1,4 @@
-from http.server import HTTPStatus
+from .datastruct import HTTPStatus
 
 
 class IllegalAccessException(Exception):
