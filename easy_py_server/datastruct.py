@@ -38,7 +38,6 @@ class Response:
         self.__content_type = content_type
         self.__status = HTTPStatus.OK
         self.__error_message = None
-        self.__content = None
         self.__new_session = None
 
     def setContentType(self, content_type: str) -> None:

@@ -148,11 +148,10 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             raise InternalException(e)
 
     def convert_rtn(self, rtn):
-        if type(rtn) != Response:
-            response = Response()
-            response.setContent(rtn)
-        else:
-            response = rtn
+        if type(rtn) == Response:
+            return rtn
+        response = Response()
+        response.setContent(rtn)
         origin_content = response.getContent()
         # todo: may allowed json object
         if type(origin_content) == str:
