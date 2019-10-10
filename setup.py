@@ -7,5 +7,6 @@ setup(name='easy_py_server',
       author='scientificRat',
       author_email='huangzhengyue.1996@gmail.com',
       url='',
-      packages=['easy_py_server']
+      packages=['easy_py_server'],
+      install_requires=['Pillow']
       )
