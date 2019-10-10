@@ -5,12 +5,15 @@ from .exception import *
 import inspect
 
 import os, sys
+import io
 import re
 import uuid
 import traceback
 import urllib.parse
 import time, threading, datetime
 import json
+from PIL import Image
+from PIL.ImageFile import ImageFile
 
 __version__ = "0.9.2"
 
@@ -153,12 +156,17 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         response = Response()
         response.setContent(rtn)
         origin_content = response.getContent()
-        # todo: may allowed json object
+        # TODO: Identify json object, video object and so on
         if type(origin_content) == str:
             response.setContent(origin_content.encode('utf-8'))
         elif type(origin_content) == dict:
             response.setContent(json.dumps(origin_content))
             response.setContentType('application/json; charset=utf-8')
+        elif isinstance(origin_content, ImageFile):
+            img_byte_array = io.BytesIO()
+            origin_content.save(img_byte_array, format=origin_content.format)
+            response.setContent(img_byte_array.getvalue())
+            response.setContentType(origin_content.get_format_mimetype())
         elif type(origin_content) == bytes or origin_content is None:
             response.setContentType('application/octet-stream')
         else:
