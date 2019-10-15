@@ -298,7 +298,6 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         for part in parts:
             if len(part) == 0:
                 continue
-            print(part)
             splits = part.split(b'\r\n\r\n')
             assert len(splits) == 2
             head, data = splits
@@ -344,6 +343,20 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                     raise NotImplementedError("Wrong request head")
         return body, param_more
 
+    def default_response_process(self, method):
+        path, param = self.parse_url_path(self.path)
+        body, param_more = self.parse_request_body()
+        param.update(param_more)
+        try:
+            listener = self.find_listener(path, param, method)
+            if listener is None:
+                raise HttpException(HTTPStatus.NOT_FOUND)
+            else:
+                response = self.call_listener(listener, param)
+                self.make_response(response)
+        except HttpException as e:
+            self.deal_http_exception(e)
+
     def do_GET(self):
         # parse and separate request url
         path, param = self.parse_url_path(self.path)
@@ -359,21 +372,29 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             self.deal_http_exception(e)
 
     def do_POST(self):
-        path, param = self.parse_url_path(self.path)
-        body, param_more = self.parse_request_body()
-        param.update(param_more)
-        try:
-            listener = self.find_listener(path, param, Method.POST)
-            if listener is None:
-                raise HttpException(HTTPStatus.NOT_FOUND)
-            else:
-                response = self.call_listener(listener, param)
-                self.make_response(response)
-        except HttpException as e:
-            self.deal_http_exception(e)
+        self.default_response_process(Method.POST)
 
+    # fixme: should not be default, especially for static files
     def do_HEAD(self):
-        pass
+        self.default_response_process(Method.POST)
+
+    def do_DELETE(self):
+        self.default_response_process(Method.POST)
+
+    def do_PUT(self):
+        self.default_response_process(Method.POST)
+
+    def do_CONNECT(self):
+        self.default_response_process(Method.POST)
+
+    def do_OPTIONS(self):
+        self.default_response_process(Method.POST)
+
+    def do_TRACE(self):
+        self.default_response_process(Method.POST)
+
+    def do_PATCH(self):
+        self.default_response_process(Method.POST)
 
 
 class EasyServer(HTTPServer):
