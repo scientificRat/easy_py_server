@@ -17,20 +17,19 @@ pip3 install git+https://github.com/scientificRat/easy_py_server.git
 
 #### Demo
 ```python
-from easy_py_server import httpd, Request, Response
-import json
+from easy_py_server import httpd, Request, Response, MultipartFile
 
 
 # get method
 @httpd.get("/api")
 def demo(a: int, b: int):
-    return json.dumps({"success": True, "content": "%d + %d = %d" % (a, b, a + b)})
+    return dict(success=True, content="%d + %d = %d" % (a, b, a + b))
 
 
 # path parameter
 @httpd.get("/api/:id")
 def demo(id):
-    return 'api ' + id
+    return 'api' + id
 
 
 # set session
@@ -53,11 +52,18 @@ def post(key):
     return str(key)
 
 
+# post multipart file
+@httpd.post("/multipart")
+def post(save_name: str, file: MultipartFile):
+    save_path = '{}.txt'.format(save_name)
+    file.save(save_path)
+    return dict(success=True, message="save to {}".format(save_path))
+
+
 if __name__ == '__main__':
     # start the server (default listen on port 8090) (blocking)
     Response.DEFAULT_CONTENT_TYPE = "application/json; charset=utf-8"
     httpd.start_serve()
-
 
 ```
 
@@ -94,8 +100,6 @@ You can bind `GET`/`POST` methods simply by adding `@get`/`@post` like it's show
 
 you can get request **parameters** and **session** by `Request` which is the first parameter of you binding function
 
-.....unfinished
 
 # Attention!
-The author is lazy and only implement GET and POST method, you can give a pull request if you like :)
-
+This server may contains some security issues.

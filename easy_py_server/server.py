@@ -15,7 +15,7 @@ import json
 from PIL import Image
 from PIL.ImageFile import ImageFile
 
-__version__ = "0.9.3"
+__version__ = "0.9.4"
 
 
 class EasyServerHandler(BaseHTTPRequestHandler):
