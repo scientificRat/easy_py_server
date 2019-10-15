@@ -86,3 +86,21 @@ class Method(Enum):
     OPTIONS = 7
     TRACE = 8
     PATCH = 9
+
+
+class MultipartFile:
+    def __init__(self, filename: str, content_type: str, data: bytes):
+        self.filename = filename
+        self.content_type = content_type
+        self.data = data
+        self.__data_pointer = 0
+
+    def save(self, file: str):
+        with open(file, 'wb') as f:
+            f.write(self.data)
+
+    def read(self, cnt):
+        end = max(self.__data_pointer + cnt, len(self.data))
+        rst = self.data[self.__data_pointer: end]
+        self.__data_pointer += cnt
+        return rst

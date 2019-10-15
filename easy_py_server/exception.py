@@ -1,6 +1,7 @@
 from .datastruct import HTTPStatus
 
 
+# fixme:目前这个错回返回500？？
 class IllegalAccessException(Exception):
     pass
 

@@ -105,9 +105,13 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 value = request_param_dic[name]
             if parameter.annotation != inspect.Parameter.empty:
                 tp = parameter.annotation
-                # TODO: parse json and file
                 try:
-                    value = tp(value)
+                    if tp == MultipartFile:
+                        pass
+                    elif tp == dict:
+                        value = json.load(value)
+                    else:
+                        value = tp(value)
                 except Exception as e:
                     raise InternalException(e, "type converting error")
             pass_param_list.append(value)
@@ -160,7 +164,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         if type(origin_content) == str:
             response.setContent(origin_content.encode('utf-8'))
         elif type(origin_content) == dict:
-            response.setContent(json.dumps(origin_content))
+            response.setContent(json.dumps(origin_content, ensure_ascii=False).encode('utf-8'))
             response.setContentType('application/json; charset=utf-8')
         elif isinstance(origin_content, ImageFile):
             img_byte_array = io.BytesIO()
@@ -277,24 +281,67 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         param = {} if len(row) < 2 else EasyServerHandler.parse_parameter(row[1])
         return row[0], param
 
+    @staticmethod
+    def parse_multipart_form_data(body: bytes, boundary: bytes):
+        """
+        Parse multipart/form-data
+        :param body: body in bytes
+        :param boundary: boundary string in bytes
+        :return: DICT { parm_name: (filename, content_type, data) }
+        """
+        end = body.rfind(b'--\r\n')
+        if end > 0 and len(body) - end == 4:
+            #  remove tail
+            body = body[:end]
+        parts = body.split(boundary)
+        rst = {}
+        for part in parts:
+            if len(part) == 0:
+                continue
+            print(part)
+            splits = part.split(b'\r\n\r\n')
+            assert len(splits) == 2
+            head, data = splits
+            data = data[:-2]  # remove \r\n
+            # parse name
+            match = re.findall(br'name="([\S]+)"', head)
+            name = urllib.parse.unquote(match[0].decode())
+            # parse filename
+            filename = None
+            match = re.findall(br'filename="([\S]+)"', head)
+            if len(match) > 0:
+                filename = urllib.parse.unquote(match[0].decode())
+            # parse Content-Type
+            content_type = None
+            if filename is not None:
+                match = re.findall(br'Content-Type: ([\S]+)$|;', head)
+                if len(match) > 0:
+                    content_type = match[0]
+            if filename is None:
+                data = urllib.parse.unquote(data.decode())
+            rst[name] = (filename, content_type, data)
+        return rst
+
     def parse_request_body(self):
         request_len = int(self.headers.get("Content-Length", 0))
         request_type = self.headers.get("Content-Type", None)
-        body = self.rfile.read(request_len)
+        body: bytes = self.rfile.read(request_len)
         param_more = {}
         if request_type is not None:
             if re.match("application/x-www-form-urlencoded", request_type) is not None:
                 param_more = self.parse_parameter(bytes.decode(body))
             elif re.match("multipart/form-data", request_type) is not None:
-                # fixme: fail to parse files
-                boundary = re.findall('boundary=([\S]+)', request_type)
+                boundary = re.findall(r'boundary=([\S]+)', request_type)
                 if len(boundary) == 1:
-                    boundary = boundary[0]
-                    body_str = bytes.decode(body)
-                    match = re.findall('name="([\S]+)"\r\n\r\n([\s\S]+?)\r\n', body_str)
-                    for k, v in match:
-                        param_more[k] = v
-                pass
+                    boundary = ("--{}".format(boundary[0])).encode()
+                    param_more_raw = self.parse_multipart_form_data(body, boundary)
+                    for name, (filename, content_type, data) in param_more_raw.items():
+                        if filename is None:
+                            param_more[name] = data
+                        else:
+                            param_more[name] = MultipartFile(filename, content_type, data)
+                else:
+                    raise NotImplementedError("Wrong request head")
         return body, param_more
 
     def do_GET(self):
