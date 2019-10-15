@@ -5,16 +5,20 @@
     <title>Title</title>
 </head>
 <body>
-<h1>hello easy_server</h1>
-<img src="cat.jpg">
-<img src="test.png">
+<div style="padding: 0 10%;font-family: monospace, sans-serif">
+    <h1>Hello EasyPyServer</h1>
+    <img src="cat.jpg" alt="cat">
+    <form action="/multipart" method="post" enctype="multipart/form-data">
+        <label>
+            Save file to server:
+            <input name="save_name" placeholder="path" type="text">
+        </label><br>
+        <input name="file" type="file"><br>
+        <input type="submit">
+    </form>
 
-<form action="/post" method="post" enctype="multipart/form-data">
-    <input name="k" type="text"><br>
-    <input name="t" type="text"><br>
-    <!--<input name="f" type="file"><br>-->
-    <input type="submit">
-</form>
+</div>
+
 
 <script src="jquery-3.3.1.min.js"></script>
 </body>
