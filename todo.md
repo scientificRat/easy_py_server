@@ -7,3 +7,4 @@
 6. response 不要传入，改为函数内创建
 7. response set-header
 8. 改为异步io
+9. session处理不当，不应该开线程

@@ -1,21 +1,21 @@
-from http.server import (HTTPServer, BaseHTTPRequestHandler)
-from typing import (Tuple, Sequence)
-from .datastruct import *
-from .exception import *
+import datetime
 import inspect
-
-import os, sys
 import io
+import json
+import os
 import re
-import uuid
+import sys
+import threading
+import time
 import traceback
 import urllib.parse
-import time, threading, datetime
-import json
-from PIL import Image
+import uuid
+from http.server import (HTTPServer, BaseHTTPRequestHandler)
+from typing import (Tuple, Sequence)
 from PIL.ImageFile import ImageFile
-
-__version__ = "0.9.4"
+from .datastruct import *
+from .exception import *
+from . import __version__
 
 
 class EasyServerHandler(BaseHTTPRequestHandler):
