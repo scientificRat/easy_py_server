@@ -1,11 +1,6 @@
 from .datastruct import HTTPStatus
 
 
-# fixme:目前这个错回返回500？？
-class IllegalAccessException(Exception):
-    pass
-
-
 class HttpException(Exception):
     def __init__(self, http_status, info=""):
         self.http_status = http_status
@@ -13,6 +8,11 @@ class HttpException(Exception):
 
     def __str__(self):
         return "HttpException: " + str(self.http_status) + " " + str(self.info)
+
+
+class IllegalAccessException(HttpException):
+    def __init__(self, error):
+        HttpException.__init__(self, HTTPStatus.UNPROCESSABLE_ENTITY, error)
 
 
 class InternalException(HttpException):

@@ -15,7 +15,7 @@ from typing import (Tuple, Sequence)
 from PIL.ImageFile import ImageFile
 from .datastruct import *
 from .exception import *
-from . import __version__
+from easy_py_server import __version__
 
 
 class EasyServerHandler(BaseHTTPRequestHandler):
@@ -151,6 +151,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             if current_none_session and request is not None and request.getSession() is not None:
                 response.setNewSession(request.getSession())
             return response
+        except HttpException as e:
+            raise e
         except Exception as e:
             raise InternalException(e)
 
