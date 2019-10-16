@@ -109,7 +109,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                     if tp == MultipartFile:
                         pass
                     elif tp == dict:
-                        value = json.load(value)
+                        value = json.loads(value)
                     else:
                         value = tp(value)
                 except Exception as e:
@@ -409,7 +409,7 @@ class EasyServer(HTTPServer):
     def addRequestListener(cls, path: str, methods: Sequence[Method], listener):
         path_params = re.findall("(:[^/]+)", path)
         for parm in path_params:
-            path = path.replace(parm, "([^/]+)")
+            path = path.replace(parm, r"([\S]+)")
         if len(path_params) != 0:
             path = re.compile(path)
         cls.listeners_dic[path] = (listener, methods, path_params)
