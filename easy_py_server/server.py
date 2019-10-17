@@ -136,13 +136,14 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             self.wfile.write(response.get_content())
 
     def make_response_on_exception(self, e):
+        e_str = e.info
         if isinstance(e, InternalServerException):
-            e_str = e.info + "\n"
+            e_str += "\n\n"
             exc_type, exc_value, exc_traceback = sys.exc_info()
             err_list = traceback.format_exception(exc_type, exc_value, exc_traceback, limit=5)
             for item in err_list:
                 e_str += str(item)
-        self.send_error(e.http_status, None, e.info)
+        self.send_error(e.http_status, None, e_str)
 
     def get_session(self, cookies) -> Optional[dict]:
         if cookies is not None and self.SESSION_COOKIE_NAME in cookies:
@@ -301,7 +302,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         except AttributeError:
             # path isn't set if the requestline was bad
             msg = self.requestline
-        code = str(code)
+        code = str(int(code))
         color = termcolor.colored
         if code[0] == "1":  # 1xx - Informational
             msg = color(msg, attrs=["bold"])
@@ -401,7 +402,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 elif parameter.default != inspect.Parameter.empty:
                     value = parameter.default
                 else:
-                    raise HttpException(HTTPStatus.BAD_REQUEST, "parameter '%s' is required" % name)
+                    raise HttpException(HTTPStatus.UNPROCESSABLE_ENTITY, "parameter '%s' is required" % name)
             else:
                 value = request_param_dic[name]
             if parameter.annotation != inspect.Parameter.empty:
