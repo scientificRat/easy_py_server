@@ -11,6 +11,7 @@ import traceback
 import urllib.parse
 import uuid
 import termcolor
+from http.client import HTTPMessage
 from http.server import (HTTPServer, BaseHTTPRequestHandler)
 from typing import (Tuple, Sequence)
 from socketserver import ThreadingMixIn
@@ -100,10 +101,9 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 raise HttpException(HTTPStatus.METHOD_NOT_ALLOWED)
         return listener
 
-    def call_listener(self, listener, param) -> Response:
-        cookies = self.get_cookie()
-        session = self.get_session(cookies)
-        pass_param_list = self.generate_listener_parameters(listener, cookies, session, param)
+    def call_listener(self, listener, request: Request) -> Response:
+        session = request.session
+        pass_param_list = self.generate_listener_parameters(listener, request)
         try:
             # call the listener
             rtn = listener(*pass_param_list)
@@ -250,6 +250,12 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                     raise NotImplementedError("Unsupported request type: %s" % request_type)
         return body, param_more
 
+    def construct_request_object(self, param) -> Request:
+        cookies = self.get_cookie()
+        session = self.get_session(cookies)
+        raw_headers: HTTPMessage = self.headers
+        return Request(session, param, cookies, raw_headers)
+
     def default_response_process(self, method):
         try:
             path, param = self.parse_url_path(self.path)
@@ -259,7 +265,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             if listener is None:
                 raise HttpException(HTTPStatus.NOT_FOUND)
             else:
-                response = self.call_listener(listener, param)
+                request = self.construct_request_object(param)
+                response = self.call_listener(listener, request)
                 self.make_response(response)
         except Exception as e:
             self.make_response_on_exception(e)
@@ -273,7 +280,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             if listener is None:
                 self.deal_static_file_request(path)
             else:
-                response = self.call_listener(listener, param)
+                request = self.construct_request_object(param)
+                response = self.call_listener(listener, request)
                 self.make_response(response)
         except Exception as e:
             self.make_response_on_exception(e)
@@ -404,12 +412,12 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         return rst
 
     @staticmethod
-    def generate_listener_parameters(listener, cookies, session, request_param_dic):
+    def generate_listener_parameters(listener, request: Request):
         pass_param_list = []
+        request_param_dic = request.params
         for name, parameter in inspect.signature(listener).parameters.items():
             # session and something
             if parameter.annotation == Request:
-                request = Request(session, request_param_dic, cookies)
                 pass_param_list.append(request)
                 continue
             # TODO: I hope to add `httpSession` `Cookies` objects, Request is not convenient

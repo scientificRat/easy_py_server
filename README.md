@@ -130,6 +130,17 @@ The value of a, i.e. 1 and the value of b will be passed to your service functio
 #### Specify Types
 The parameters will be interpreted as `string` object by default. You can change this behavior by specify the 
 type and then these parameters will be automatically converted to your desired types.
+```python
+# post multipart file
+@httpd.post("/multipart")
+def post(save_name: str, file: MultipartFile):
+    save_path = '{}.txt'.format(save_name)
+    file.save(save_path)
+    return dict(success=True, message="save to {}".format(save_path))
+```
+#### Special types
+* `Request`: http request object, encapsulating  `session`, `parameters` ,`cookies`
+* `MultipartFile`: supporting for file uploaded
 
 #### Access session and cookies
 They are encapsulated inside the `Request` object, so you can get them by getting a `Request` object first.
