@@ -16,6 +16,6 @@ setup(name='easy_py_server',
       author_email='huangzhengyue.1996@gmail.com',
       url='',
       packages=['easy_py_server'],
-      install_requires=['Pillow'],
+      install_requires=['Pillow', 'termcolor'],
       long_description=long_description,
       )
