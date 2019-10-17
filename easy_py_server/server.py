@@ -10,8 +10,10 @@ import time
 import traceback
 import urllib.parse
 import uuid
+import termcolor
 from http.server import (HTTPServer, BaseHTTPRequestHandler)
 from typing import (Tuple, Sequence)
+from socketserver import ThreadingMixIn
 from PIL.ImageFile import ImageFile
 from .datastruct import *
 from .exception import *
@@ -61,13 +63,13 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def version_string(self):
         return self.server_version
 
-    def handle(self):
-        """
-        override to support http1.1
-        `while loop` may course blocking (which is not allowed in select/poll IO model)
-        """
-        self.close_connection = True
-        self.handle_one_request()
+    # def handle(self):
+    #     """
+    #     override to support http1.1
+    #     `while loop` may course blocking (which is not allowed in select/poll IO model)
+    #     """
+    #     self.close_connection = True
+    #     self.handle_one_request()
 
     def on_internal_exception(self, e):
         e_str = ""
@@ -81,41 +83,6 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 e_str += str(item)
 
         self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, None, e_str)
-
-    # fixme: I need a better function name
-    def generate_pass_parameter_list(self, listener, session, request_param_dic):
-        request, response = None, None
-        pass_param_list = []
-        for name, parameter in inspect.signature(listener).parameters.items():
-            # session and something
-            if parameter.annotation == Request:
-                request = Request(session, request_param_dic)
-                pass_param_list.append(request)
-                continue
-            # TODO: I hope to add `httpSession`
-            # request parameters
-            if name not in request_param_dic:
-                if ":" + name in request_param_dic:
-                    value = request_param_dic[":" + name]
-                elif parameter.default != inspect.Parameter.empty:
-                    value = parameter.default
-                else:
-                    raise HttpException(HTTPStatus.BAD_REQUEST, "parameter '%s' is required" % name)
-            else:
-                value = request_param_dic[name]
-            if parameter.annotation != inspect.Parameter.empty:
-                tp = parameter.annotation
-                try:
-                    if tp == MultipartFile:
-                        pass
-                    elif tp == dict:
-                        value = json.loads(value)
-                    else:
-                        value = tp(value)
-                except Exception as e:
-                    raise InternalException(e, "type converting error")
-            pass_param_list.append(value)
-        return pass_param_list, request
 
     def find_listener(self, path: str, param: dict, method: Method):
         listeners_dic = self.server.listeners_dic
@@ -142,42 +109,22 @@ class EasyServerHandler(BaseHTTPRequestHandler):
 
     def call_listener(self, listener, param):
         session = self.get_session()
-        current_none_session = session is None
-        pass_param_list, request = self.generate_pass_parameter_list(listener, session, param)
+        pass_param_list = self.generate_listener_parameters(listener, session, param)
         try:
             # call the listener
             rtn = listener(*pass_param_list)
             response = self.convert_rtn(rtn)
-            if current_none_session and request is not None and request.getSession() is not None:
-                response.setNewSession(request.getSession())
+            if session is None:
+                for param in pass_param_list:
+                    if isinstance(param, Request) and param.getSession() is not None:
+                        # if listener set session for this request
+                        response.setNewSession(param.getSession())
+                        break
             return response
         except HttpException as e:
             raise e
         except Exception as e:
             raise InternalException(e)
-
-    def convert_rtn(self, rtn):
-        if type(rtn) == Response:
-            return rtn
-        response = Response()
-        response.setContent(rtn)
-        origin_content = response.getContent()
-        # TODO: Identify json object, video object and so on
-        if type(origin_content) == str:
-            response.setContent(origin_content.encode('utf-8'))
-        elif type(origin_content) == dict:
-            response.setContent(json.dumps(origin_content, ensure_ascii=False).encode('utf-8'))
-            response.setContentType('application/json; charset=utf-8')
-        elif isinstance(origin_content, ImageFile):
-            img_byte_array = io.BytesIO()
-            origin_content.save(img_byte_array, format=origin_content.format)
-            response.setContent(img_byte_array.getvalue())
-            response.setContentType(origin_content.get_format_mimetype())
-        elif type(origin_content) == bytes or origin_content is None:
-            response.setContentType('application/octet-stream')
-        else:
-            response.setContent(bytes(origin_content))
-        return response
 
     def make_response(self, response: Response):
         # if error message is set, ignore any return content
@@ -270,59 +217,6 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         finally:
             f.close()
 
-    @staticmethod
-    def parse_parameter(src_str):
-        param = {}
-        for item in re.findall(r'(^|&)([^=]+)=([^&]*)', src_str):
-            param[urllib.parse.unquote(item[1])] = urllib.parse.unquote(item[2])
-        return param
-
-    @staticmethod
-    def parse_url_path(path) -> Tuple[str, Dict[str, str]]:
-        row = path.split('?')
-        param = {} if len(row) < 2 else EasyServerHandler.parse_parameter(row[1])
-        return row[0], param
-
-    @staticmethod
-    def parse_multipart_form_data(body: bytes, boundary: bytes):
-        """
-        Parse multipart/form-data
-        :param body: body in bytes
-        :param boundary: boundary string in bytes
-        :return: DICT { parm_name: (filename, content_type, data) }
-        """
-        end = body.rfind(b'--\r\n')
-        if end > 0 and len(body) - end == 4:
-            #  remove tail
-            body = body[:end]
-        parts = body.split(boundary)
-        rst = {}
-        for part in parts:
-            if len(part) == 0:
-                continue
-            splits = part.split(b'\r\n\r\n')
-            assert len(splits) == 2
-            head, data = splits
-            data = data[:-2]  # remove \r\n
-            # parse name
-            match = re.findall(br'name="([\S]+)"', head)
-            name = urllib.parse.unquote(match[0].decode())
-            # parse filename
-            filename = None
-            match = re.findall(br'filename="([\S]+)"', head)
-            if len(match) > 0:
-                filename = urllib.parse.unquote(match[0].decode())
-            # parse Content-Type
-            content_type = None
-            if filename is not None:
-                match = re.findall(br'Content-Type: ([\S]+)$|;', head)
-                if len(match) > 0:
-                    content_type = match[0]
-            if filename is None:
-                data = urllib.parse.unquote(data.decode())
-            rst[name] = (filename, content_type, data)
-        return rst
-
     def parse_request_body(self):
         request_len = int(self.headers.get("Content-Length", 0))
         request_type = self.headers.get("Content-Type", None)
@@ -398,14 +292,164 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def do_PATCH(self):
         self.default_response_process(Method.POST)
 
+    def log_request(self, code="-", size="-"):
+        # copy from werkzeug
+        try:
+            path = urllib.parse.unquote(self.path)
+            msg = "%s %s %s" % (self.command, path, self.request_version)
+        except AttributeError:
+            # path isn't set if the requestline was bad
+            msg = self.requestline
+        code = str(code)
+        color = termcolor.colored
+        if code[0] == "1":  # 1xx - Informational
+            msg = color(msg, attrs=["bold"])
+        elif code[0] == "2":  # 2xx - Success
+            msg = color(msg, color="white")
+        elif code == "304":  # 304 - Resource Not Modified
+            msg = color(msg, color="cyan")
+        elif code[0] == "3":  # 3xx - Redirection
+            msg = color(msg, color="green")
+        elif code == "404":  # 404 - Resource Not Found
+            msg = color(msg, color="yellow")
+        elif code[0] == "4":  # 4xx - Client Error
+            msg = color(msg, color="red", attrs=["bold"])
+        else:  # 5xx, or any other response
+            msg = color(msg, color="magenta", attrs=["bold"])
+        self.log("info", '"%s" %s %s', msg, code, size)
 
-class EasyServer(HTTPServer):
+    def log_error(self, *args):
+        self.log("error", *args)
+
+    def log_message(self, format, *args):
+        self.log("info", format, *args)
+
+    def log(self, type, message, *args):
+        print(
+            "[%s] %s - - [%s] %s"
+            % (type, self.address_string(), self.log_date_time_string(), message % args),
+        )
+
+    @staticmethod
+    def parse_parameter(src_str):
+        param = {}
+        for item in re.findall(r'(^|&)([^=]+)=([^&]*)', src_str):
+            param[urllib.parse.unquote(item[1])] = urllib.parse.unquote(item[2])
+        return param
+
+    @staticmethod
+    def parse_url_path(path) -> Tuple[str, Dict[str, str]]:
+        row = path.split('?')
+        param = {} if len(row) < 2 else EasyServerHandler.parse_parameter(row[1])
+        return row[0], param
+
+    @staticmethod
+    def parse_multipart_form_data(body: bytes, boundary: bytes):
+        """
+        Parse multipart/form-data
+        :param body: body in bytes
+        :param boundary: boundary string in bytes
+        :return: DICT { parm_name: (filename, content_type, data) }
+        """
+        end = body.rfind(b'--\r\n')
+        if end > 0 and len(body) - end == 4:
+            #  remove tail
+            body = body[:end]
+        parts = body.split(boundary)
+        rst = {}
+        for part in parts:
+            if len(part) == 0:
+                continue
+            splits = part.split(b'\r\n\r\n')
+            assert len(splits) == 2
+            head, data = splits
+            data = data[:-2]  # remove \r\n
+            # parse name
+            match = re.findall(br'name="([\S]+)"', head)
+            name = urllib.parse.unquote(match[0].decode())
+            # parse filename
+            filename = None
+            match = re.findall(br'filename="([\S]+)"', head)
+            if len(match) > 0:
+                filename = urllib.parse.unquote(match[0].decode())
+            # parse Content-Type
+            content_type = None
+            if filename is not None:
+                match = re.findall(br'Content-Type: ([\S]+)$|;', head)
+                if len(match) > 0:
+                    content_type = match[0]
+            if filename is None:
+                data = urllib.parse.unquote(data.decode())
+            rst[name] = (filename, content_type, data)
+        return rst
+
+    @staticmethod
+    def generate_listener_parameters(listener, session, request_param_dic):
+        request, response = None, None
+        pass_param_list = []
+        for name, parameter in inspect.signature(listener).parameters.items():
+            # session and something
+            if parameter.annotation == Request:
+                request = Request(session, request_param_dic)
+                pass_param_list.append(request)
+                continue
+            # TODO: I hope to add `httpSession`
+            # request parameters
+            if name not in request_param_dic:
+                if ":" + name in request_param_dic:
+                    value = request_param_dic[":" + name]
+                elif parameter.default != inspect.Parameter.empty:
+                    value = parameter.default
+                else:
+                    raise HttpException(HTTPStatus.BAD_REQUEST, "parameter '%s' is required" % name)
+            else:
+                value = request_param_dic[name]
+            if parameter.annotation != inspect.Parameter.empty:
+                tp = parameter.annotation
+                try:
+                    if tp == MultipartFile:
+                        pass
+                    elif tp == dict:
+                        value = json.loads(value)
+                    else:
+                        value = tp(value)
+                except Exception as e:
+                    raise InternalException(e, "type converting error")
+            pass_param_list.append(value)
+        return pass_param_list
+
+    @staticmethod
+    def convert_rtn(rtn):
+        if type(rtn) == Response:
+            return rtn
+        response = Response()
+        response.setContent(rtn)
+        origin_content = response.getContent()
+        # TODO: Identify video object and so on
+        if type(origin_content) == str:
+            response.setContent(origin_content.encode('utf-8'))
+        elif type(origin_content) == dict:
+            response.setContent(json.dumps(origin_content, ensure_ascii=False).encode('utf-8'))
+            response.setContentType('application/json; charset=utf-8')
+        elif isinstance(origin_content, ImageFile):
+            img_byte_array = io.BytesIO()
+            origin_content.save(img_byte_array, format=origin_content.format)
+            response.setContent(img_byte_array.getvalue())
+            response.setContentType(origin_content.get_format_mimetype())
+        elif type(origin_content) == bytes or origin_content is None:
+            response.setContentType('application/octet-stream')
+        else:
+            response.setContent(bytes(origin_content))
+        return response
+
+
+class EasyServer(ThreadingMixIn, HTTPServer):
     listeners_dic = {}
 
     def __init__(self, port: int = 8090, address: str = "0.0.0.0"):
         super().__init__((address, port), EasyServerHandler)
         self.sessions = {}
-        print("[%s] server start at %s:%s" % (datetime.datetime.now().ctime(), address, str(port)))
+        print("[%s] server running on http://%s:%s" % (datetime.datetime.now().ctime(), address, str(port)))
 
     @classmethod
     def addRequestListener(cls, path: str, methods: Sequence[Method], listener):
