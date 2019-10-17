@@ -2,7 +2,7 @@ import re
 import codecs
 from setuptools import setup
 
-with codecs.open('README.md', encoding='utf-8') as f:
+with codecs.open('README.txt', encoding='utf-8') as f:
     long_description = f.read()
 
 with codecs.open("easy_py_server/__init__.py", encoding="utf8") as f:
@@ -11,7 +11,7 @@ with codecs.open("easy_py_server/__init__.py", encoding="utf8") as f:
 setup(name='easy_py_server',
       version=version,
       description='A flexible web server plugin providing a robust HTTP service for your projects',
-      author='Zhengyue Hunag',
+      author='Zhengyue Huang',
       author_email='huangzhengyue.1996@gmail.com',
       url='https://github.com/scientificRat/easy_py_server.git',
       packages=['easy_py_server'],
@@ -20,7 +20,7 @@ setup(name='easy_py_server',
       classifiers=[
           "Programming Language :: Python :: 3",
           "Development Status :: 4 - Beta",
-          "Topic :: Internet :: WWW/HTTP :: HTTP Servers"
+          "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
           "License :: OSI Approved :: MIT License",
           "Operating System :: OS Independent",
       ],

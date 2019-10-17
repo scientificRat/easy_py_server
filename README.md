@@ -1,5 +1,7 @@
 # easy\_py\_server
 
+[![PyPI version](https://badge.fury.io/py/easy-py-server.svg)](https://badge.fury.io/py/easy-py-server)
+
 > A flexible web server plugin providing a robust HTTP service for your projects.
 
 * Flexible to integrate with your existing code **without** any configuration file or environ settings.
@@ -9,15 +11,21 @@
 * Easy to customize, writen in pure python
 
 ## Get started
-#### Environment
+### Environment
 * python3
 
-#### Install
+### Install
+stable version:
+```bash
+pip3 install easy-py-server
+```
+working version:
 ```bash
 pip3 install git+https://github.com/scientificRat/easy_py_server.git
 ```
 
-#### Demo
+### Demo 
+
 ```python
 from easy_py_server import httpd, Request, Response, MultipartFile
 
@@ -74,17 +82,15 @@ if __name__ == '__main__':
     # start the server (default listen on port 8090) (blocking)
     Response.DEFAULT_CONTENT_TYPE = "application/json; charset=utf-8"
     httpd.start_serve()
-
 ```
 
-
-#### Create directory for static resources(Optional)
+### Create directory for static resources(Optional)
 ```bash
 mkdir www
 # ... add some files into this directory
 ```
 
-#### Run and have fun :)
+### Run and have fun :)
 ```bash
 python3 your-source.py
 # your 'www' directory should be in the same directory of 'your-source.py'
@@ -104,7 +110,9 @@ from easy_py_server import httpd, Method, Request, Response
 You can bind a service by adding decorator `@requestMapping`, `@get`, `@post` before your function definition. Feel free
  to use these decorators, they will register your functions as service callback without changing the definition 
  of your original code.
-Decorator `@requestMapping` has a full support for different methods, 
+ 
+Decorator `@requestMapping` has a full support for different methods 
+
 ```python
 @httpd.requestMapping(path="/path/to/your/api", methods=[Method.GET])
 def f(request: Request):
