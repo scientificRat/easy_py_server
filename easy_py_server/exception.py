@@ -15,7 +15,7 @@ class IllegalAccessException(HttpException):
         HttpException.__init__(self, HTTPStatus.UNPROCESSABLE_ENTITY, error)
 
 
-class InternalException(HttpException):
+class InternalServerException(HttpException):
     def __init__(self, error, info=""):
         HttpException.__init__(self, HTTPStatus.INTERNAL_SERVER_ERROR, info)
         self.error = error

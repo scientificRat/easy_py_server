@@ -22,7 +22,8 @@ from easy_py_server import __version__
 
 class EasyServerHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
-    server_version = "EasyServer/" + __version__
+    server_name = "EasyPyServer"
+    server_version = server_name + "/" + __version__
     resource_dir = 'www/'
     error_message_format = """<!DOCTYPE html>
     <html>
@@ -63,18 +64,17 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def version_string(self):
         return self.server_version
 
-    def on_internal_exception(self, e):
-        e_str = ""
-        if isinstance(e, IllegalAccessException):
-            e_str = str(e)
-        else:
-            # TODO: not good implementation
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            err_list = traceback.format_exception(exc_type, exc_value, exc_traceback, limit=5)
-            for item in err_list:
-                e_str += str(item)
+    @classmethod
+    def set_server_name(cls, name):
+        cls.server_name = name
 
-        self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, None, e_str)
+    @classmethod
+    def set_resource_dir(cls, resource_dir):
+        cls.resource_dir = resource_dir
+
+    @classmethod
+    def set_error_format(cls, template):
+        cls.error_message_format = template
 
     def find_listener(self, path: str, param: dict, method: Method):
         listeners_dic = self.server.listeners_dic
@@ -97,57 +97,66 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         if listener is not None:
             if method not in methods:
                 raise HttpException(HTTPStatus.METHOD_NOT_ALLOWED)
-            return listener
+        return listener
 
     def call_listener(self, listener, param):
-        session = self.get_session()
-        pass_param_list = self.generate_listener_parameters(listener, session, param)
+        cookies = self.get_cookie()
+        session = self.get_session(cookies)
+        pass_param_list = self.generate_listener_parameters(listener, cookies, session, param)
         try:
             # call the listener
             rtn = listener(*pass_param_list)
             response = self.convert_rtn(rtn)
             if session is None:
                 for param in pass_param_list:
-                    if isinstance(param, Request) and param.getSession() is not None:
+                    if isinstance(param, Request) and param.get_session() is not None:
                         # if listener set session for this request
-                        response.setNewSession(param.getSession())
+                        response.set_new_session(param.get_session())
                         break
             return response
         except HttpException as e:
             raise e
         except Exception as e:
-            raise InternalException(e)
+            raise InternalServerException(e)
 
     def make_response(self, response: Response):
         # if error message is set, ignore any return content
-        if response.getErrorMessage() is not None:
-            self.send_error(response.getStatus(), None, response.getErrorMessage())
+        if response.get_error_message() is not None:
+            self.send_error(response.get_status(), None, response.get_error_message())
         else:
-            self.send_response(response.getStatus())
-            self.send_header("Content-type", response.getContentType())
-            self.send_header("Content-Length", len(response.getContent()))
-            if response.getNewSession() is not None:
-                self.set_new_session_cookie(response.getNewSession())
+            self.send_response(response.get_status())
+            self.send_header("Content-type", response.get_content_type())
+            self.send_header("Content-Length", len(response.get_content()))
+            if response.get_new_session() is not None:
+                cookie_str = self.new_session_cookie(response.get_new_session())
+                self.send_header("Set-Cookie", cookie_str)
+            for key, value in response.get_cookie_dict().items():
+                self.send_header("Set-Cookie", "%s=%s" % (str(key), str(value)))
             self.end_headers()
-            self.wfile.write(response.getContent())
+            self.wfile.write(response.get_content())
 
-    def deal_http_exception(self, e):
-        if isinstance(e, InternalException):
-            self.on_internal_exception(e)
-        else:
-            self.send_error(e.http_status, None, e.info)
+    def make_response_on_exception(self, e):
+        if isinstance(e, InternalServerException):
+            e_str = e.info + "\n"
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            err_list = traceback.format_exception(exc_type, exc_value, exc_traceback, limit=5)
+            for item in err_list:
+                e_str += str(item)
+        self.send_error(e.http_status, None, e.info)
 
-    def get_session(self) -> Optional[dict]:
+    def get_session(self, cookies) -> Optional[dict]:
+        if cookies is not None and self.SESSION_COOKIE_NAME in cookies:
+            return self.server.sessions.get(cookies[self.SESSION_COOKIE_NAME], None)
+
+    def get_cookie(self) -> Optional[dict]:
         cookie_str = self.headers.get('Cookie', "")
-        cookies = re.findall(self.SESSION_COOKIE_NAME + "=([a-zA-Z0-9_-]*)", cookie_str)  # time consuming
-        if len(cookies) <= 0:
-            return None
-        for c in cookies:
-            if c in self.server.sessions:
-                return self.server.sessions.get(c, None)
-        return None
+        match = re.findall(r"([\S]*)=([\S]*)(;|$)", cookie_str)
+        cookie_dict = {}
+        for key, value, _ in match:
+            cookie_dict[key] = value
+        return cookie_dict
 
-    def set_new_session_cookie(self, session):
+    def new_session_cookie(self, session):
         new_session_code = str(uuid.uuid1()).replace("-", "")
         while new_session_code in self.server.sessions:
             new_session_code = str(uuid.uuid1()).replace("-", "")
@@ -159,8 +168,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         threading.Thread(target=clean_expire_session).start()
         self.server.sessions[new_session_code] = session
         expire_date = self.date_time_string(time.time() + self.DEFAULT_SESSION_EXPIRE_SECONDS)
-        set_cookie_str = self.SESSION_COOKIE_NAME + "=" + new_session_code + "; path=/; expires=" + expire_date
-        self.send_header("Set-Cookie", set_cookie_str)
+        session_cookie_str = self.SESSION_COOKIE_NAME + "=" + new_session_code + "; path=/; expires=" + expire_date
+        return session_cookie_str
 
     def deal_static_file_request(self, path):
         path = self.resource_dir + path[1:]
@@ -243,7 +252,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 response = self.call_listener(listener, param)
                 self.make_response(response)
         except HttpException as e:
-            self.deal_http_exception(e)
+            self.make_response_on_exception(e)
 
     def do_GET(self):
         # parse and separate request url
@@ -257,7 +266,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 response = self.call_listener(listener, param)
                 self.make_response(response)
         except HttpException as e:
-            self.deal_http_exception(e)
+            self.make_response_on_exception(e)
 
     def do_POST(self):
         self.default_response_process(Method.POST)
@@ -376,16 +385,15 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         return rst
 
     @staticmethod
-    def generate_listener_parameters(listener, session, request_param_dic):
-        request, response = None, None
+    def generate_listener_parameters(listener, cookies, session, request_param_dic):
         pass_param_list = []
         for name, parameter in inspect.signature(listener).parameters.items():
             # session and something
             if parameter.annotation == Request:
-                request = Request(session, request_param_dic)
+                request = Request(session, request_param_dic, cookies)
                 pass_param_list.append(request)
                 continue
-            # TODO: I hope to add `httpSession`
+            # TODO: I hope to add `httpSession` `Cookies` objects, Request is not convenient
             # request parameters
             if name not in request_param_dic:
                 if ":" + name in request_param_dic:
@@ -406,7 +414,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                     else:
                         value = tp(value)
                 except Exception as e:
-                    raise InternalException(e, "type converting error")
+                    raise InternalServerException(e, "type converting error")
             pass_param_list.append(value)
         return pass_param_list
 
@@ -415,32 +423,33 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         if type(rtn) == Response:
             return rtn
         response = Response()
-        response.setContent(rtn)
-        origin_content = response.getContent()
+        response.set_content(rtn)
+        origin_content = response.get_content()
         # TODO: Identify video object and so on
         if type(origin_content) == str:
-            response.setContent(origin_content.encode('utf-8'))
+            response.set_content(origin_content.encode('utf-8'))
         elif type(origin_content) == dict:
-            response.setContent(json.dumps(origin_content, ensure_ascii=False).encode('utf-8'))
-            response.setContentType('application/json; charset=utf-8')
+            response.set_content(json.dumps(origin_content, ensure_ascii=False).encode('utf-8'))
+            response.set_content_type('application/json; charset=utf-8')
         elif isinstance(origin_content, ImageFile):
             img_byte_array = io.BytesIO()
             origin_content.save(img_byte_array, format=origin_content.format)
-            response.setContent(img_byte_array.getvalue())
-            response.setContentType(origin_content.get_format_mimetype())
+            response.set_content(img_byte_array.getvalue())
+            response.set_content_type(origin_content.get_format_mimetype())
         elif type(origin_content) == bytes or origin_content is None:
-            response.setContentType('application/octet-stream')
+            response.set_content_type('application/octet-stream')
         else:
-            response.setContent(bytes(origin_content))
+            response.set_content(bytes(origin_content))
         return response
 
 
 class EasyServer(ThreadingMixIn, HTTPServer):
     listeners_dic = {}
 
-    def __init__(self, port: int = 8090, address: str = "0.0.0.0"):
-        super().__init__((address, port), EasyServerHandler)
+    def __init__(self, port: int = 8090, address: str = "0.0.0.0", handler=EasyServerHandler):
+        self.handler = handler
         self.sessions = {}
+        super().__init__((address, port), handler)
         print("[%s] server running on http://%s:%s" % (datetime.datetime.now().ctime(), address, str(port)))
 
     @classmethod

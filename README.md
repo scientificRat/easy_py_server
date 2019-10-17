@@ -35,14 +35,14 @@ def demo(id):
 # set session
 @httpd.get("/set/:data")
 def set(request: Request, data):
-    request.setSessionAttribute("data", data)
+    request.set_session_attribute("data", data)
     return "set: " + str(data)
 
 
 # read session
 @httpd.get("/query")
 def query(request: Request):
-    data = request.getSessionAttribute("data")
+    data = request.get_session_attribute("data")
     return "get: " + str(data)
 
 

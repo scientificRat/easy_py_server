@@ -5,29 +5,35 @@ from .exception import IllegalAccessException
 
 
 class Request:
-    def __init__(self, session: dict, param: dict):
+    def __init__(self, session: dict, param: dict, cookies: dict = None):
         if session is None:
             session = {}
         self.__session = session
         self.__params = param
+        self.__cookies = cookies
 
-    def getParam(self, key: str, required=True) -> str:
+    def get_parm(self, key: str, required=True) -> str:
         value = self.__params.get(key, None)
         if required and value is None:
             raise IllegalAccessException("Parameter '%s' is required" % (key,))
         return value
 
-    def getSession(self) -> Dict[Any, Any]:
+    def get_session(self) -> Dict[Any, Any]:
         return self.__session
 
-    def getSessionAttribute(self, key: Any) -> Optional[Any]:
+    def get_session_attribute(self, key: Any) -> Optional[Any]:
         return self.__session.get(key, None)
 
-    def removeSession(self, key: Any):
+    def remove_session(self, key: Any):
         self.__session.pop(key, None)
 
-    def setSessionAttribute(self, key: Any, value: Any):
+    def set_session_attribute(self, key: Any, value: Any):
         self.__session[key] = value
+
+    def get_cookie(self, key):
+        if self.__cookies is not None:
+            return self.__cookies[key]
+        return None
 
 
 class Response:
@@ -39,39 +45,46 @@ class Response:
         self.__status = HTTPStatus.OK
         self.__error_message = None
         self.__new_session = None
+        self.__set_cookie_dict = {}
 
-    def setContentType(self, content_type: str) -> None:
+    def set_content_type(self, content_type: str) -> None:
         self.__content_type = content_type
 
-    def getContentType(self) -> str:
+    def get_content_type(self) -> str:
         return self.__content_type if self.__content_type is not None else self.DEFAULT_CONTENT_TYPE
 
-    def setStatus(self, status: HTTPStatus):
+    def set_status(self, status: HTTPStatus):
         self.__status = status
 
-    def getStatus(self):
+    def get_status(self):
         return self.__status
 
-    def setStatusCode(self, code: int):
+    def set_status_code(self, code: int):
         self.__status = HTTPStatus(code)
 
-    def setContent(self, content: Any):
+    def set_content(self, content: Any):
         self.__content = content
 
-    def getContent(self):
+    def get_content(self):
         return self.__content
 
-    def setNewSession(self, session):
+    def set_new_session(self, session):
         self.__new_session = session
 
-    def getNewSession(self):
+    def get_new_session(self):
         return self.__new_session
+
+    def set_cookie(self, key, value):
+        self.__set_cookie_dict[key] = value
+
+    def get_cookie_dict(self):
+        return self.__set_cookie_dict
 
     def error(self, message: str, status=HTTPStatus.BAD_REQUEST):
         self.__error_message = message
         self.__status = status
 
-    def getErrorMessage(self):
+    def get_error_message(self):
         return self.__error_message
 
 
