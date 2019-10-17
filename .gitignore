@@ -4,3 +4,5 @@
 try.*
 __pycache__
 build/
+dist/
+easy_py_server.egg-info/
