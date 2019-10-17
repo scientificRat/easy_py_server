@@ -15,10 +15,13 @@ class IllegalAccessException(HttpException):
         HttpException.__init__(self, HTTPStatus.UNPROCESSABLE_ENTITY, error)
 
 
-class InternalServerException(HttpException):
-    def __init__(self, error, info=""):
-        HttpException.__init__(self, HTTPStatus.INTERNAL_SERVER_ERROR, info)
-        self.error = error
+class WarpedInternalServerException(HttpException):
+    def __init__(self, original_error, overwrite_info=None):
+        self.error = original_error
+        self.info = overwrite_info
+        if overwrite_info is None:
+            overwrite_info = str(self.error)
+        HttpException.__init__(self, HTTPStatus.INTERNAL_SERVER_ERROR, self.info)
 
     def __str__(self):
-        return "InternalException: " + str(self.info) + "\n" + str(self.error)
+        return "InternalException: \n" + str(self.info)

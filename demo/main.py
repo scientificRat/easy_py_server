@@ -41,6 +41,14 @@ def post(save_name: str, file: MultipartFile):
     return dict(success=True, message="save to {}".format(save_path))
 
 
+# redirection
+@httpd.get("/redirect")
+def redirect():
+    resp = Response()
+    resp.set_redirection_url("/cat.jpg")
+    return resp
+
+
 if __name__ == '__main__':
     # start the server (default listen on port 8090) (blocking)
     Response.DEFAULT_CONTENT_TYPE = "application/json; charset=utf-8"

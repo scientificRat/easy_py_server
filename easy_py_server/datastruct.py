@@ -46,6 +46,8 @@ class Response:
         self.__error_message = None
         self.__new_session = None
         self.__set_cookie_dict = {}
+        self.__additional_headers = {}
+        self.__redirection_url = None
 
     def set_content_type(self, content_type: str) -> None:
         self.__content_type = content_type
@@ -59,7 +61,7 @@ class Response:
     def get_status(self):
         return self.__status
 
-    def set_status_code(self, code: int):
+    def set_status_by_code(self, code: int):
         self.__status = HTTPStatus(code)
 
     def set_content(self, content: Any):
@@ -79,6 +81,18 @@ class Response:
 
     def get_cookie_dict(self):
         return self.__set_cookie_dict
+
+    def add_header(self, key: str, value: str):
+        self.__additional_headers[key] = value
+
+    def get_additional_headers(self):
+        return self.__additional_headers
+
+    def set_redirection_url(self, url):
+        self.__redirection_url = url
+
+    def get_redirection_url(self):
+        return self.__redirection_url
 
     def error(self, message: str, status=HTTPStatus.BAD_REQUEST):
         self.__error_message = message

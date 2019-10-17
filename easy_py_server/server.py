@@ -25,6 +25,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     server_name = "EasyPyServer"
     server_version = server_name + "/" + __version__
     resource_dir = 'www/'
+    verbose_exception = True
     error_message_format = """<!DOCTYPE html>
     <html>
         <head>
@@ -99,7 +100,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 raise HttpException(HTTPStatus.METHOD_NOT_ALLOWED)
         return listener
 
-    def call_listener(self, listener, param):
+    def call_listener(self, listener, param) -> Response:
         cookies = self.get_cookie()
         session = self.get_session(cookies)
         pass_param_list = self.generate_listener_parameters(listener, cookies, session, param)
@@ -117,7 +118,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         except HttpException as e:
             raise e
         except Exception as e:
-            raise InternalServerException(e)
+            raise WarpedInternalServerException(e)
 
     def make_response(self, response: Response):
         # if error message is set, ignore any return content
@@ -125,6 +126,11 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             self.send_error(response.get_status(), None, response.get_error_message())
         else:
             self.send_response(response.get_status())
+            if response.get_status() == HTTPStatus.PERMANENT_REDIRECT:
+                self.send_header("Location", response.get_redirection_url())
+                self.end_headers()
+                return
+            # send response with content
             self.send_header("Content-type", response.get_content_type())
             self.send_header("Content-Length", len(response.get_content()))
             if response.get_new_session() is not None:
@@ -132,12 +138,15 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 self.send_header("Set-Cookie", cookie_str)
             for key, value in response.get_cookie_dict().items():
                 self.send_header("Set-Cookie", "%s=%s" % (str(key), str(value)))
+            for key, value in response.get_additional_headers().items():
+                self.send_header(key, value)
             self.end_headers()
             self.wfile.write(response.get_content())
 
     def make_response_on_exception(self, e):
+        e: HttpException = self.cvt_exception(e)
         e_str = e.info
-        if isinstance(e, InternalServerException):
+        if isinstance(e, WarpedInternalServerException):
             e_str += "\n\n"
             exc_type, exc_value, exc_traceback = sys.exc_info()
             err_list = traceback.format_exception(exc_type, exc_value, exc_traceback, limit=5)
@@ -238,35 +247,35 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                         else:
                             param_more[name] = MultipartFile(filename, content_type, data)
                 else:
-                    raise NotImplementedError("Wrong request head")
+                    raise NotImplementedError("Unsupported request type: %s" % request_type)
         return body, param_more
 
     def default_response_process(self, method):
-        path, param = self.parse_url_path(self.path)
-        body, param_more = self.parse_request_body()
-        param.update(param_more)
         try:
+            path, param = self.parse_url_path(self.path)
+            body, param_more = self.parse_request_body()
+            param.update(param_more)
             listener = self.find_listener(path, param, method)
             if listener is None:
                 raise HttpException(HTTPStatus.NOT_FOUND)
             else:
                 response = self.call_listener(listener, param)
                 self.make_response(response)
-        except HttpException as e:
+        except Exception as e:
             self.make_response_on_exception(e)
 
     def do_GET(self):
-        # parse and separate request url
-        path, param = self.parse_url_path(self.path)
-        # find listener. request will be regarded as static resource if no listener existed
         try:
+            # parse and separate request url
+            path, param = self.parse_url_path(self.path)
+            # find listener. request will be regarded as static resource if no listener existed
             listener = self.find_listener(path, param, Method.GET)
             if listener is None:
                 self.deal_static_file_request(path)
             else:
                 response = self.call_listener(listener, param)
                 self.make_response(response)
-        except HttpException as e:
+        except Exception as e:
             self.make_response_on_exception(e)
 
     def do_POST(self):
@@ -331,6 +340,15 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             "[%s] %s - - [%s] %s"
             % (type, self.address_string(), self.log_date_time_string(), message % args),
         )
+
+    @staticmethod
+    def cvt_exception(e) -> HttpException:
+        if isinstance(e, HttpException):
+            return e
+        if isinstance(e, NotImplementedError):
+            return HttpException(HTTPStatus.NOT_IMPLEMENTED, info=str(e))
+        else:
+            return WarpedInternalServerException(e)
 
     @staticmethod
     def parse_parameter(src_str):
@@ -415,13 +433,18 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                     else:
                         value = tp(value)
                 except Exception as e:
-                    raise InternalServerException(e, "type converting error")
+                    raise WarpedInternalServerException(e, "type converting error")
             pass_param_list.append(value)
         return pass_param_list
 
     @staticmethod
-    def convert_rtn(rtn):
-        if type(rtn) == Response:
+    def convert_rtn(rtn) -> Response:
+        if isinstance(rtn, Response):
+            redirect_url = rtn.get_redirection_url()
+            if redirect_url is not None:
+                rtn = Response()
+                rtn.set_status(HTTPStatus.PERMANENT_REDIRECT)  # 308
+                rtn.set_redirection_url(redirect_url)
             return rtn
         response = Response()
         response.set_content(rtn)
