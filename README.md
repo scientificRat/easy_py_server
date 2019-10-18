@@ -27,13 +27,29 @@ pip3 install git+https://github.com/scientificRat/easy_py_server.git
 ### Demo 
 
 ```python
-from easy_py_server import httpd, Request, Response, MultipartFile
+from easy_py_server import EasyPyServer, Request, Response, MultipartFile
+
+httpd = EasyPyServer('0.0.0.0', 8090) # create the server object
 
 
-# get method
+# method GET
 @httpd.get("/api")
 def demo(a: int, b: int):
     return dict(success=True, content="%d + %d = %d" % (a, b, a + b))
+
+
+# method POST
+@httpd.post("/post")
+def post(key):
+    return str(key)
+
+
+# uploading file
+@httpd.post("/multipart")
+def post(save_name: str, file: MultipartFile):
+    save_path = '{}.txt'.format(save_name)
+    file.save(save_path)
+    return dict(success=True, message="save to {}".format(save_path))
 
 
 # path parameter
@@ -56,20 +72,6 @@ def query(request: Request):
     return "get: " + str(data)
 
 
-# post method
-@httpd.post("/post")
-def post(key):
-    return str(key)
-
-
-# post multipart file
-@httpd.post("/multipart")
-def post(save_name: str, file: MultipartFile):
-    save_path = '{}.txt'.format(save_name)
-    file.save(save_path)
-    return dict(success=True, message="save to {}".format(save_path))
-
-
 # redirection
 @httpd.get("/redirect")
 def redirect():
@@ -79,9 +81,8 @@ def redirect():
 
 
 if __name__ == '__main__':
-    # start the server (default listen on port 8090) (blocking)
-    Response.DEFAULT_CONTENT_TYPE = "application/json; charset=utf-8"
-    httpd.start_serve()
+    # start the server (default is blocking)
+    httpd.start_serve(blocking=True)
 ```
 
 ### Create directory for static resources(Optional)
@@ -98,11 +99,19 @@ python3 your-source.py
 
 ## Documentation
 
-For normal usages, you only need to know `httpd`, `class Method`, `class Request`,`class Response`
-You can import them by
-
+For normal usages, you only need to know `class EasyPyServer`, `class Method`, `class Request`,`class Response`
+.You can import them by
 ```python
-from easy_py_server import httpd, Method, Request, Response
+from easy_py_server import EasyPyServer, Method, Request, Response
+```
+
+### Creating Server
+```python
+from easy_py_server import EasyPyServer
+# create 
+httpd= EasyPyServer(listen_address="0.0.0.0", port=8090)
+# run
+httpd.start_serve(blocking=True)
 ```
 
 ### Registering Service 
@@ -121,7 +130,18 @@ You can bind `GET`/`POST` methods with a simpler `@get`/`@post` like it's shown 
 def demo(a: int, b: int):
     return dict(success=True, content="%d + %d = %d" % (a, b, a + b))
 ```
+> note: Decorators are the recommended way to register your service, but you can also
+> use the naive <server object>.add_request_listener() to do it. 
 
+
+```python
+from easy_py_server import EasyPyServer, Method
+def func():
+    pass
+httpd = EasyPyServer()
+httpd.add_request_listener("/",[Method.GET],func)
+
+```
 ### Parameter Injection
 
 Parameters such as `a`, `b` and `request` shown above can be automatically injected to your service function when it is requested.
@@ -163,8 +183,8 @@ You can return a python object without explicitly constructing `Response` object
 * dict -> json
 * string -> text
 * PIL -> image
-* bytes ->octet-stream
-* other->octet-stream
+* bytes -> octet-stream
+* other -> octet-stream
 
 As an example, you can easily return a PIL image:
 ```python
@@ -179,6 +199,7 @@ def show_image(image_path: str):
 ```
 
 
-# Attention !
+## More
 * Supporting for `ipv6` and `https` will come soon.  
+* Return value with specified content-type will come soon
 * Probably with potential security issues.

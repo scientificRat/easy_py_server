@@ -1,10 +1,26 @@
-from easy_py_server import httpd, Request, Response, MultipartFile
+from easy_py_server import EasyPyServer, Request, Response, MultipartFile
+
+httpd = EasyPyServer('0.0.0.0', 8090)
 
 
-# get method
+# method GET
 @httpd.get("/api")
 def demo(a: int, b: int):
     return dict(success=True, content="%d + %d = %d" % (a, b, a + b))
+
+
+# method POST
+@httpd.post("/post")
+def post(key):
+    return str(key)
+
+
+# uploading file
+@httpd.post("/multipart")
+def post(save_name: str, file: MultipartFile):
+    save_path = '{}.txt'.format(save_name)
+    file.save(save_path)
+    return dict(success=True, message="save to {}".format(save_path))
 
 
 # path parameter
@@ -27,20 +43,6 @@ def query(request: Request):
     return "get: " + str(data)
 
 
-# post method
-@httpd.post("/post")
-def post(key):
-    return str(key)
-
-
-# post multipart file
-@httpd.post("/multipart")
-def post(save_name: str, file: MultipartFile):
-    save_path = '{}.txt'.format(save_name)
-    file.save(save_path)
-    return dict(success=True, message="save to {}".format(save_path))
-
-
 # redirection
 @httpd.get("/redirect")
 def redirect():
@@ -50,6 +52,5 @@ def redirect():
 
 
 if __name__ == '__main__':
-    # start the server (default listen on port 8090) (blocking)
-    Response.DEFAULT_CONTENT_TYPE = "application/json; charset=utf-8"
-    httpd.start_serve()
+    # start the server (default is blocking)
+    httpd.start_serve(blocking=True)

@@ -6,13 +6,11 @@ from .exception import IllegalAccessException
 
 
 class Request:
-    def __init__(self, session: dict, params: dict, cookies: dict = None, raw_headers: HTTPMessage = None):
-        if session is None:
-            session = {}
-        self.session = session
+    def __init__(self, params: dict, cookies: dict = None, session: dict = None, raw_headers: HTTPMessage = None):
         self.params = params
         self.cookies = cookies
-        self.raw_headers = raw_headers
+        self.session = session
+        self.raw_headers: HTTPMessage = raw_headers
 
     def get_parm(self, key: str, required=True) -> str:
         value = self.params.get(key, None)
@@ -21,15 +19,18 @@ class Request:
         return value
 
     def get_session(self) -> Dict[Any, Any]:
-        return self.session
+        return self.session if self.session is not None else {}
 
     def get_session_attribute(self, key: Any) -> Optional[Any]:
-        return self.session.get(key, None)
+        return self.session.get(key, None) if self.session is not None else None
 
     def remove_session(self, key: Any):
-        self.session.pop(key, None)
+        if self.session is not None:
+            self.session.pop(key, None)
 
     def set_session_attribute(self, key: Any, value: Any):
+        if self.session is None:
+            self.session = {}
         self.session[key] = value
 
     def get_cookie(self, key):
@@ -39,15 +40,13 @@ class Request:
 
 
 class Response:
-    DEFAULT_CONTENT_TYPE = "text/html; charset=utf-8"
 
     def __init__(self, content=None, content_type=None):
         self.content = content
         self.content_type = content_type
         self.status = HTTPStatus.OK
         self.error_message = None
-        self.new_session = None
-        self.set_cookie_dict = {}
+        self.set_cookie_str_list = []
         self.additional_headers = {}
         self.redirection_url = None
 
@@ -55,7 +54,7 @@ class Response:
         self.content_type = content_type
 
     def get_content_type(self) -> str:
-        return self.content_type if self.content_type is not None else self.DEFAULT_CONTENT_TYPE
+        return self.content_type
 
     def set_status(self, status: HTTPStatus):
         self.status = status
@@ -72,17 +71,14 @@ class Response:
     def get_content(self):
         return self.content
 
-    def set_new_session(self, session):
-        self.new_session = session
+    def set_cookie_str(self, cookie_str):
+        self.set_cookie_str_list.append(cookie_str)
 
-    def get_new_session(self):
-        return self.new_session
+    def set_cookie_kv(self, key, value):
+        self.set_cookie_str("%s=%s" % (str(key), str(value)))
 
-    def set_cookie(self, key, value):
-        self.set_cookie_dict[key] = value
-
-    def get_cookie_dict(self):
-        return self.set_cookie_dict
+    def get_cookie_str_list(self):
+        return self.set_cookie_str_list
 
     def add_header(self, key: str, value: str):
         self.additional_headers[key] = value
