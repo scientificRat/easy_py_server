@@ -2,13 +2,13 @@
 
 [![PyPI version](https://badge.fury.io/py/easy-py-server.svg)](https://badge.fury.io/py/easy-py-server)
 
-> A flexible web server plugin providing a robust HTTP service for your projects.
+> A flexible plugin providing reliable HTTP service for your projects.
 
 * Flexible to integrate with your existing code **without** any configuration file or environ settings.
-* Spring MCV like parameter injection implemented by python decorator: `@post`, `@get` and etc.
-* Easy to manage `static resources`,`session`, `cookies`, `path parameter`, `redirection`, `file uploading` and etc.
+* Spring MCV like parameter injection implemented by python decorator: `@post`, `@get` etc.
+* Easy to manage `static resources`,`session`, `cookies`, `path parameter`, `redirection`, `file uploading` etc.
 * A single process multiple threads server framework that allows you share objects in your code.
-* Easy to customize, writen in pure python
+* Easy to customize. `easy-py-server` is written in pure python for easy debugging and customizing.
 
 ## Get started
 ### Environment
@@ -98,23 +98,20 @@ python3 your-source.py
 
 ## Documentation
 
-For normal usages you only need to known `httpd`, `class Method`, `class Request`,`class Response`
+For normal usages, you only need to know `httpd`, `class Method`, `class Request`,`class Response`
 You can import them by
 
 ```python
 from easy_py_server import httpd, Method, Request, Response
 ```
 
-### Bind Service 
+### Registering Service 
 
-You can bind a service by adding decorator `@requestMapping`, `@get`, `@post` before your function definition. Feel free
- to use these decorators, they will register your functions as service callback without changing the definition 
- of your original code.
- 
-Decorator `@requestMapping` has a full support for different methods 
+You can register a service by adding a decorator such as `@route`, `@get`, `@post`  to your function. Feel free
+ to use these decorators, they will register your functions as callback without changing the original code of your definition. Among them, decorator `@route` has full support for different methods: 
 
 ```python
-@httpd.requestMapping(path="/path/to/your/api", methods=[Method.GET])
+@httpd.route(path="/path/to/your/api", methods=[Method.GET])
 def f(request: Request):
     return Response()
 ```
@@ -127,17 +124,17 @@ def demo(a: int, b: int):
 
 ### Parameter Injection
 
-Parameters such as a, b and request shown above can be automatically injected when your service is called.
-They will be parsed from your http request with the same names as your variables. For instance, you can 
-access `demo` function shown above by visiting the following url: 
+Parameters such as `a`, `b` and `request` shown above can be automatically injected to your service function when it is requested.
+These parameters will be parsed from the HTTP request depending on the names of your variables. For instance, you can 
+access `demo` function (shown above) and inject parameters `a` and `b`  by visiting the URL: 
 ```text
 http://<your-server-address>:<port>/api?a=1&b=12
 ```
-The value of a, i.e. 1 and the value of b will be passed to your service function when this url is visited.
+The value of parameter `a` will be parsed as 1 and as 12 for `b`.
 
-#### Specify Types
-The parameters will be interpreted as `string` object by default. You can change this behavior by specify the 
-type and then these parameters will be automatically converted to your desired types.
+#### Specifying Types
+The parameters will be interpreted as `string` object by default. You can change this behavior by specifying explict 
+types to make them automatically converted to your desired types.
 ```python
 # post multipart file
 @httpd.post("/multipart")
@@ -148,11 +145,10 @@ def post(save_name: str, file: MultipartFile):
 ```
 #### Special types
 * `Request`: http request object, encapsulating  `session`, `parameters` ,`cookies`
-* `MultipartFile`: supporting for file uploaded
+* `MultipartFile`: supporting for uploading files.
 
 #### Access session and cookies
-They are encapsulated inside the `Request` object, so you can get them by getting a `Request` object first.
-This object is defined in `datastruct.py`, you can check it for more details by yourself.
+They are encapsulated inside the `Request` object, so you can get them by getting a `Request` object first. It's defined in `datastruct.py`, you can check this file for more details.
 ```python
 @httpd.get("/")
 def index(req: Request):
@@ -162,12 +158,27 @@ def index(req: Request):
 ```
 
 ### Automatic Response Construction
-You can return a python object without explicitly constructing `Response` object.
+You can return a python object without explicitly constructing `Response` object. They'll be automatically converted a correct HTTP response to the client. The supporting objects are listed as following:
 
 * dict -> json
 * string -> text
 * PIL -> image
+* bytes ->octet-stream
+* other->octet-stream
+
+As an example, you can easily return a PIL image:
+```python
+from PIL import Image
+@httpd.get("/show_image")
+def show_image(image_path: str):
+    try:
+        img = Image.open(image_path, mode='r')
+    except IOError as e:
+        return None
+    return img
+```
+
 
 # Attention !
-* No supporting for `ipv6` and `https`, they'll come soon.  
-* With potential security issues.
+* Supporting for `ipv6` and `https` will come soon.  
+* Probably with potential security issues.
