@@ -189,7 +189,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def deal_static_file_request(self, path):
         path = self.resource_dir + path[1:]
         # for security
-        if len(re.findall('(/../)', path)) != 0:
+        if len(re.findall(r'(/\.\./)', path)) != 0:
             self.send_error(HTTPStatus.FORBIDDEN)
             return
         if len(path) == 0 or path[-1] == '/':
@@ -398,11 +398,11 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             head, data = splits
             data = data[:-2]  # remove \r\n
             # parse name
-            match = re.findall(br'name="([\S]+)"', head)
+            match = re.findall(br'name="([\S ]+)"', head)
             name = urllib.parse.unquote(match[0].decode())
             # parse filename
             filename = None
-            match = re.findall(br'filename="([\S]+)"', head)
+            match = re.findall(br'filename="([\S ]+)"', head)
             if len(match) > 0:
                 filename = urllib.parse.unquote(match[0].decode())
             # parse Content-Type
