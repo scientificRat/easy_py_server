@@ -9,11 +9,6 @@ def demo(a: int, b: int):
     return dict(success=True, content="%d + %d = %d" % (a, b, a + b))
 
 
-@app.get("/")
-def demo_index(a: int):
-    return a
-
-
 # method POST
 @app.post("/post")
 def post(key):
