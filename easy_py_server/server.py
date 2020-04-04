@@ -154,6 +154,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         e: HttpException = self.cvt_exception(e)
         e_str = e.info
         if isinstance(e, WarpedInternalServerException):
+            if e_str is None:
+                e_str = ""
             e_str += "\n\n"
             exc_type, exc_value, exc_traceback = sys.exc_info()
             err_list = traceback.format_exception(exc_type, exc_value, exc_traceback, limit=5)
