@@ -11,7 +11,6 @@ import traceback
 import urllib.parse
 import uuid
 import termcolor
-from http.client import HTTPMessage
 from http.server import (HTTPServer, BaseHTTPRequestHandler)
 from typing import (Tuple, Sequence)
 from socketserver import ThreadingMixIn
@@ -25,7 +24,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_name = "EasyPyServer"
     server_version = server_name + "/" + __version__
-    resource_dir = 'www/'
+    resource_dir = None  # static file folder
     verbose_exception = True
     error_message_format = """<!DOCTYPE html>
     <html>
@@ -140,13 +139,16 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             if content_type is None:
                 content_type = self.server.default_response_type
             self.send_header("Content-type", content_type)
-            self.send_header("Content-Length", len(response.get_content()))
+            content = response.get_content()
+            if content is None:
+                content = b""
+            self.send_header("Content-Length", len(content))
             for cookie_str in response.get_cookie_str_list():
                 self.send_header("Set-Cookie", cookie_str)
             for key, value in response.get_additional_headers().items():
                 self.send_header(key, value)
             self.end_headers()
-            self.wfile.write(response.get_content())
+            self.wfile.write(content)
 
     def make_response_on_exception(self, e):
         e: HttpException = self.cvt_exception(e)
@@ -187,7 +189,10 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         return session_cookie_str
 
     def deal_static_file_request(self, path):
-        path = self.resource_dir + path[1:]
+        if self.resource_dir is None:
+            self.send_error(HTTPStatus.FORBIDDEN)
+            return
+        path = os.path.join(self.resource_dir, path[1:])
         # for security
         if len(re.findall(r'(/\.\./)', path)) != 0:
             self.send_error(HTTPStatus.FORBIDDEN)
@@ -398,7 +403,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             head, data = splits
             data = data[:-2]  # remove \r\n
             # parse name
-            match = re.findall(br'name="([\S ]+)"', head)
+            match = re.findall(br'name="([\S]+)"', head)
             name = urllib.parse.unquote(match[0].decode())
             # parse filename
             filename = None
@@ -485,8 +490,19 @@ class EasyServerHandler(BaseHTTPRequestHandler):
 
 class EasyPyServer(ThreadingMixIn, HTTPServer):
 
-    def __init__(self, listen_address: str = "0.0.0.0", port: int = 8090, handler=EasyServerHandler,
-                 default_response_type="text/html; charset=utf-8"):
+    def __init__(self, listen_address: str = "0.0.0.0", port: int = 8090,
+                 server_app_name="EasyPyServer",
+                 static_folder="www",
+                 default_response_type="text/html; charset=utf-8",
+                 handler=EasyServerHandler):
+        self.server_app_name = server_app_name
+        self.static_folder = os.path.abspath(static_folder)
+        if not os.path.exists(self.static_folder):
+            self.static_folder = None
+            print("[Warning] The setting static folder does not exist: {}".format(self.static_folder), file=sys.stderr)
+        handler.server_name = self.server_app_name
+        handler.resource_dir = self.static_folder
+
         self.listen_address = listen_address
         self.port = port
         self.handler = handler
@@ -502,6 +518,9 @@ class EasyPyServer(ThreadingMixIn, HTTPServer):
             return thread
         else:
             self.serve_forever()
+
+    def run(self, blocking=True):
+        self.start_serve(blocking)
 
     def serve_forever(self, poll_interval=0.5):
         print("[%s] server running on http://%s:%d" % (

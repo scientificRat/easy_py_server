@@ -124,8 +124,10 @@ class MultipartFile:
         with open(file, 'wb') as f:
             f.write(self.data)
 
-    def read(self, cnt):
+    def read(self, cnt=-1):
+        if cnt < 0:
+            cnt = len(self.data)
         end = max(self.__data_pointer + cnt, len(self.data))
         rst = self.data[self.__data_pointer: end]
-        self.__data_pointer += cnt
+        self.__data_pointer = end
         return rst

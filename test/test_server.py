@@ -7,7 +7,6 @@ def mock_func():
     print("ok")
 
 
-
 class TestEasyPyServer(unittest.TestCase):
     def test_reuse_address(self):
         self.assertTrue(EasyPyServer.allow_reuse_address)
@@ -41,7 +40,8 @@ class FunctionalTest(unittest.TestCase):
         def get(r: Request):
             return r.get_session_attribute('data')
 
-        self.server.add_request_listener('/set', Method.GET, set)
+        self.server.add_request_listener('/set', [Method.GET], set)
+        # fixme: debug 模式下会block 很奇怪
         self.thread = self.server.start_serve(blocking=False)
 
     def test_session(self):
@@ -60,7 +60,8 @@ class FunctionalTest(unittest.TestCase):
         self.assertIn('text/html', rst.headers['Content-Type'])
         self.assertEqual(rst.text, test_data)
         s.close()
-        print("session test success")
+        import sys
+        print("session test success", file=sys.stderr)
 
     def tearDown(self) -> None:
         self.server.server_close()

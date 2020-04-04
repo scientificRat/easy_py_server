@@ -1,22 +1,22 @@
 from easy_py_server import EasyPyServer, Request, Response, MultipartFile
 
-httpd = EasyPyServer('0.0.0.0', 8090)
+app = EasyPyServer('0.0.0.0', 8090, static_folder="www")
 
 
 # method GET
-@httpd.get("/api")
+@app.get("/api")
 def demo(a: int, b: int):
     return dict(success=True, content="%d + %d = %d" % (a, b, a + b))
 
 
 # method POST
-@httpd.post("/post")
+@app.post("/post")
 def post(key):
     return str(key)
 
 
 # uploading file
-@httpd.post("/multipart")
+@app.post("/multipart")
 def post(save_name: str, file: MultipartFile):
     save_path = '{}.txt'.format(save_name)
     file.save(save_path)
@@ -24,27 +24,27 @@ def post(save_name: str, file: MultipartFile):
 
 
 # path parameter
-@httpd.get("/api/:id")
+@app.get("/api/:id")
 def demo(id):
     return 'api' + id
 
 
 # set session
-@httpd.get("/set/:data")
+@app.get("/set/:data")
 def set(request: Request, data):
     request.set_session_attribute("data", data)
     return "set: " + str(data)
 
 
 # read session
-@httpd.get("/query")
+@app.get("/query")
 def query(request: Request):
     data = request.get_session_attribute("data")
     return "get: " + str(data)
 
 
 # redirection
-@httpd.get("/redirect")
+@app.get("/redirect")
 def redirect():
     resp = Response()
     resp.set_redirection_url("/cat.jpg")
@@ -53,4 +53,4 @@ def redirect():
 
 if __name__ == '__main__':
     # start the server (default is blocking)
-    httpd.start_serve(blocking=True)
+    app.run(blocking=False)
