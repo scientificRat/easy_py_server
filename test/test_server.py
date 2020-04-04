@@ -40,6 +40,10 @@ class FunctionalTest(unittest.TestCase):
         def get(r: Request):
             return r.get_session_attribute('data')
 
+        @self.server.get('/sum_2/:a/and/:bb')
+        def sum_2(a: int, bb: int):
+            return a + bb
+
         self.server.add_request_listener('/set', [Method.GET], set)
         # fixme: debug 模式下会block 很奇怪
         self.thread = self.server.start_serve(blocking=False)
@@ -60,8 +64,23 @@ class FunctionalTest(unittest.TestCase):
         self.assertIn('text/html', rst.headers['Content-Type'])
         self.assertEqual(rst.text, test_data)
         s.close()
-        import sys
-        print("session test success", file=sys.stderr)
+        print("\nsession test success")
+
+    def test_path_param(self):
+        base_url = f'http://{self.addr}:{self.port}'
+        rst = requests.get(f'{base_url}/sum_2/7/and/2')
+        self.assertEqual(rst.headers['Content-Type'], 'text/html; charset=utf-8')
+        self.assertEqual(rst.text, '9')
+        rst = requests.get(f'{base_url}/sum_2/02/and/2/')
+        self.assertEqual(rst.headers['Content-Type'], 'text/html; charset=utf-8')
+        self.assertEqual(rst.text, '4')
+        rst = requests.get(f'{base_url}/sum_2/2/and/-3')
+        self.assertEqual(rst.headers['Content-Type'], 'text/html; charset=utf-8')
+        self.assertEqual(rst.text, '-1')
+        rst = requests.get(f'{base_url}/sum_2/-201/and/-3')
+        self.assertEqual(rst.headers['Content-Type'], 'text/html; charset=utf-8')
+        self.assertEqual(rst.text, '-204')
+        print("\npath_param test success")
 
     def tearDown(self) -> None:
         self.server.server_close()

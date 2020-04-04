@@ -157,10 +157,12 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             if e_str is None:
                 e_str = ""
             e_str += "\n\n"
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            err_list = traceback.format_exception(exc_type, exc_value, exc_traceback, limit=5)
-            for item in err_list:
-                e_str += str(item)
+            if self.verbose_exception:
+                # concat traceback error
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                err_list = traceback.format_exception(exc_type, exc_value, exc_traceback, limit=5)
+                for item in err_list:
+                    e_str += str(item)
         self.send_error(e.http_status, None, e_str)
 
     def get_session(self, cookies) -> Optional[dict]:
@@ -380,8 +382,11 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     @staticmethod
     def parse_url_path(path) -> Tuple[str, Dict[str, str]]:
         row = path.split('?')
+        path = row[0]
+        if len(path) > 1 and path[-1] == '/':
+            path = path[:-1]
         param = {} if len(row) < 2 else EasyServerHandler.parse_parameter(row[1])
-        return row[0], param
+        return path, param
 
     @staticmethod
     def parse_multipart_form_data(body: bytes, boundary: bytes):
@@ -471,14 +476,20 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         response = Response()
         response.set_content(rtn)
         origin_content = response.get_content()
-        # TODO: Identify video object and so on
+        # auto content type inferring and response construction
+        # todo: This should support customization
         if type(origin_content) == str:
             response.set_content(origin_content.encode('utf-8'))
             response.set_content_type("text/html; charset=utf-8")
-        elif type(origin_content) == dict:
+        elif type(origin_content) in [dict, list, tuple]:
             response.set_content(json.dumps(origin_content, ensure_ascii=False).encode('utf-8'))
             response.set_content_type('application/json; charset=utf-8')
+        elif type(origin_content) in [int, float, complex]:
+            origin_content = str(origin_content)
+            response.set_content(origin_content.encode('utf-8'))
+            response.set_content_type("text/html; charset=utf-8")
         elif isinstance(origin_content, ImageFile):
+            # PIL image
             img_byte_array = io.BytesIO()
             origin_content.save(img_byte_array, format=origin_content.format)
             response.set_content(img_byte_array.getvalue())
@@ -495,23 +506,26 @@ class EasyPyServer(ThreadingMixIn, HTTPServer):
     def __init__(self, listen_address: str = "0.0.0.0", port: int = 8090,
                  server_app_name="EasyPyServer",
                  static_folder="www",
-                 default_response_type="text/html; charset=utf-8",
-                 handler=EasyServerHandler):
+                 verbose_exception=True,
+                 default_response_type="text/html; charset=utf-8"):
         self.server_app_name = server_app_name
         self.static_folder = os.path.abspath(static_folder)
+        self.verbose_exception = verbose_exception
         if not os.path.exists(self.static_folder):
             self.static_folder = None
             print("[Warning] The setting static folder does not exist: {}".format(self.static_folder), file=sys.stderr)
-        handler.server_name = self.server_app_name
-        handler.resource_dir = self.static_folder
+
+        self.handler = EasyServerHandler
+        self.handler.server_name = self.server_app_name
+        self.handler.resource_dir = self.static_folder
+        self.handler.verbose_exception = self.verbose_exception
 
         self.listen_address = listen_address
         self.port = port
-        self.handler = handler
         self.sessions = {}
         self.listeners_dic = {}
         self.default_response_type = default_response_type
-        super().__init__((listen_address, port), handler)
+        super().__init__((listen_address, port), self.handler)
 
     def start_serve(self, blocking=True):
         if not blocking:

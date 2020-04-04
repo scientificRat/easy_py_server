@@ -9,6 +9,11 @@ def demo(a: int, b: int):
     return dict(success=True, content="%d + %d = %d" % (a, b, a + b))
 
 
+@app.get("/")
+def demo_index(a: int):
+    return a
+
+
 # method POST
 @app.post("/post")
 def post(key):
@@ -25,8 +30,13 @@ def post(save_name: str, file: MultipartFile):
 
 # path parameter
 @app.get("/api/:id")
-def demo(id):
+def demo_path(id: int):
     return 'api' + id
+
+
+@app.get("/sum_2/:a/and/:b")
+def sum_2(a: int, b: int):
+    return a + b
 
 
 # set session
