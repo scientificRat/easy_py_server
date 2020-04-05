@@ -358,7 +358,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         self.log("info", format, *args)
 
     def address_string(self):
-        # Host
+        # return the Host property in request header
+        # the super method returns the socket client IP which is not expected under a proxy request
         return self.headers.get("Host", super(EasyServerHandler, self).address_string())
 
     def log(self, type, message, *args):
@@ -458,7 +459,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 tp = parameter.annotation
                 try:
                     if tp == MultipartFile:
-                        pass
+                        if not isinstance(value, MultipartFile):
+                            raise ValueError("parameter '%s' is required to be a Multipart file" % name)
                     elif tp == dict:
                         value = json.loads(value)
                     else:
@@ -511,7 +513,8 @@ class EasyPyServer(ThreadingMixIn, HTTPServer):
                  server_app_name="EasyPyServer",
                  static_folder="www",
                  verbose_exception=True,
-                 default_response_type="text/html; charset=utf-8"):
+                 default_response_type="text/html; charset=utf-8",
+                 http_request_handler=EasyServerHandler):
         self.server_app_name = server_app_name
         self.static_folder = os.path.abspath(static_folder)
         self.verbose_exception = verbose_exception
@@ -519,7 +522,7 @@ class EasyPyServer(ThreadingMixIn, HTTPServer):
             self.static_folder = None
             print("[Warning] The setting static folder does not exist: {}".format(self.static_folder), file=sys.stderr)
 
-        self.handler = EasyServerHandler
+        self.handler = http_request_handler  # be compatible with customized handler
         self.handler.server_name = self.server_app_name
         self.handler.resource_dir = self.static_folder
         self.handler.verbose_exception = self.verbose_exception
