@@ -125,11 +125,19 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             raise WarpedInternalServerException(e)
 
     def make_response(self, response: Response):
+        """
+        Response to client according to `Response`
+        :param response: Response object
+        :return: None
+        """
         # if error message is set, ignore any return content
         if response.get_error_message() is not None:
             self.send_error(response.get_status(), None, response.get_error_message())
         else:
             self.send_response(response.get_status())
+            # send customized headers
+            for k, v in response.headers.items():
+                self.send_header(k, v)
             if response.get_status() == HTTPStatus.PERMANENT_REDIRECT:
                 self.send_header("Location", response.get_redirection_url())
                 self.end_headers()
@@ -151,7 +159,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             self.wfile.write(content)
 
     def make_response_on_exception(self, e):
-        e: HttpException = self.cvt_exception(e)
+        e: HttpException = self.convert_exception(e)
         e_str = e.info
         if isinstance(e, WarpedInternalServerException):
             if e_str is None:
@@ -360,16 +368,16 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def address_string(self):
         # return the Host property in request header
         # the super method returns the socket client IP which is not expected under a proxy request
-        return self.headers.get("Host", super(EasyServerHandler, self).address_string())
+        return self.headers.get("X-Real-IP", super(EasyServerHandler, self).address_string())
 
     def log(self, type, message, *args):
-        print(
-            "[%s] %s - - [%s] %s"
-            % (type, self.address_string(), self.log_date_time_string(), message % args),
-        )
+        rst = "[%s] %s - - [%s] %s" % (type, self.address_string(), self.log_date_time_string(), message % args)
+        if type == 'error':
+            rst = termcolor.colored(rst, color="red", attrs=["bold"])
+        print(rst)
 
     @staticmethod
-    def cvt_exception(e) -> HttpException:
+    def convert_exception(e) -> HttpException:
         if isinstance(e, HttpException):
             return e
         if isinstance(e, NotImplementedError):

@@ -1,4 +1,4 @@
-from easy_py_server import EasyPyServer, Request, Response, MultipartFile
+from easy_py_server import EasyPyServer, Request, Response, MultipartFile, ResponseFile
 
 app = EasyPyServer('0.0.0.0', 8090, static_folder="www")
 
@@ -23,10 +23,18 @@ def post(save_name: str, file: MultipartFile):
     return dict(success=True, message="save to {}".format(save_path))
 
 
+# download file
+@app.get("/download")
+def download():
+    with open("www/cat.jpg", 'rb') as f:
+        all_bytes = f.read()
+    return ResponseFile(all_bytes, filename="downcat.jpg")
+
+
 # path parameter
 @app.get("/api/:id")
 def demo_path(id: int):
-    return 'api' + id
+    return 'api' + str(id)
 
 
 @app.get("/sum_2/:a/and/:b")

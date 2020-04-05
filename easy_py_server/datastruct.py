@@ -41,14 +41,18 @@ class Request:
 
 class Response:
 
-    def __init__(self, content=None, content_type=None):
+    def __init__(self, content=None, content_type=None, status=HTTPStatus.OK, headers: Dict = None):
         self.content = content
         self.content_type = content_type
-        self.status = HTTPStatus.OK
+        self.status = status
         self.error_message = None
         self.set_cookie_str_list = []
         self.additional_headers = {}
         self.redirection_url = None
+        self.headers = {} if headers is None else headers
+
+    def set_header(self, key, value):
+        self.headers[key] = value
 
     def set_content_type(self, content_type: str) -> None:
         self.content_type = content_type
@@ -100,6 +104,15 @@ class Response:
         return self.error_message
 
 
+# response file for download
+class ResponseFile(Response):
+    def __init__(self, file_bytes, filename=None):
+        headers = {'Content-Transfer-Encoding': 'binary'}
+        if filename is not None:
+            headers['Content-Disposition'] = 'attachment; filename="{}"'.format(filename)
+        super().__init__(file_bytes, content_type="application/octet-stream", headers=headers)
+
+
 # reference from RFC 7231
 class Method(Enum):
     GET = 1
@@ -113,6 +126,7 @@ class Method(Enum):
     PATCH = 9
 
 
+# upload file
 class MultipartFile:
     def __init__(self, filename: str, content_type: str, data: bytes):
         self.filename = filename
