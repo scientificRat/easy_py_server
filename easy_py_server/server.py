@@ -357,6 +357,10 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         self.log("info", format, *args)
 
+    def address_string(self):
+        # Host
+        return self.headers.get("Host", super(EasyServerHandler, self).address_string())
+
     def log(self, type, message, *args):
         print(
             "[%s] %s - - [%s] %s"
