@@ -65,7 +65,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def __init__(self, conn_sock, client_address, server):
         # client_address : (ip, port)
         assert isinstance(server, EasyPyServer)
-        self.server: EasyPyServer = server
+        self.server = server  # type: EasyPyServer
         super().__init__(conn_sock, client_address, server)
 
     def version_string(self):
@@ -159,7 +159,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             self.wfile.write(content)
 
     def make_response_on_exception(self, e):
-        e: HttpException = self.convert_exception(e)
+        e = self.convert_exception(e)
         e_str = e.info
         if isinstance(e, WarpedInternalServerException):
             if e_str is None:
@@ -253,7 +253,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def parse_request_body(self):
         request_len = int(self.headers.get("Content-Length", 0))
         request_type = self.headers.get("Content-Type", None)
-        body: bytes = self.rfile.read(request_len)
+        body = self.rfile.read(request_len)  # type: bytes
         param_more = {}
         if request_type is not None:
             if re.match("application/x-www-form-urlencoded", request_type) is not None:
@@ -275,7 +275,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     def construct_request_object(self, param) -> Request:
         cookies = self.get_cookie()
         session = self.get_session(cookies)
-        raw_headers: HTTPMessage = self.headers
+        raw_headers = self.headers  # type: HTTPMessage
         return Request(param, cookies, session, raw_headers)
 
     def default_response_process(self, method):

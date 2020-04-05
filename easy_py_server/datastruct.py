@@ -10,7 +10,7 @@ class Request:
         self.params = params
         self.cookies = cookies
         self.session = session
-        self.raw_headers: HTTPMessage = raw_headers
+        self.raw_headers = raw_headers  # type: HTTPMessage
 
     def get_parm(self, key: str, required=True) -> str:
         value = self.params.get(key, None)

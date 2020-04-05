@@ -28,7 +28,7 @@ def post(save_name: str, file: MultipartFile):
 def download():
     with open("www/cat.jpg", 'rb') as f:
         all_bytes = f.read()
-    return ResponseFile(all_bytes, filename="downcat.jpg")
+    return ResponseFile(all_bytes, filename="download_cat.jpg")
 
 
 # path parameter
