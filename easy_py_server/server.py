@@ -257,6 +257,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         param_more = {}
         if request_type is not None:
             if re.match("application/x-www-form-urlencoded", request_type) is not None:
+                # todo: 传入参数有嵌套时没能正确处理 例如k[m]=2
                 param_more = self.parse_parameter(bytes.decode(body))
             elif re.match("multipart/form-data", request_type) is not None:
                 boundary = re.findall(r'boundary=([\S]+)', request_type)
@@ -388,8 +389,15 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     @staticmethod
     def parse_parameter(src_str):
         param = {}
-        for item in re.findall(r'(^|&)([^=]+)=([^&]*)', src_str):
-            param[urllib.parse.unquote(item[1])] = urllib.parse.unquote(item[2])
+        match = re.findall(r'(^|&)([^=]+)=([^&]*)', src_str)
+        if len(match) > 0:
+            for item in re.findall(r'(^|&)([^=]+)=([^&]*)', src_str):
+                param[urllib.parse.unquote(item[1])] = urllib.parse.unquote(item[2])
+        else:
+            try:
+                param = json.loads(match)
+            except Exception as e:
+                pass
         return param
 
     @staticmethod
