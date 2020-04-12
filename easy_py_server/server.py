@@ -259,6 +259,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             if re.match("application/x-www-form-urlencoded", request_type) is not None:
                 # todo: 传入参数有嵌套时没能正确处理 例如k[m]=2
                 param_more = self.parse_parameter(bytes.decode(body))
+            elif re.match('application/json', request_type) is not None:
+                param_more = self.parse_parameter(bytes.decode(body))
             elif re.match("multipart/form-data", request_type) is not None:
                 boundary = re.findall(r'boundary=([\S]+)', request_type)
                 if len(boundary) == 1:
@@ -395,7 +397,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 param[urllib.parse.unquote(item[1])] = urllib.parse.unquote(item[2])
         else:
             try:
-                param = json.loads(match)
+                param = json.loads(src_str)
             except Exception as e:
                 pass
         return param
@@ -461,7 +463,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 continue
             elif parameter.annotation == Response:
                 pass_param_list.append(Response())  # empty response
-            # request parameters
+            # get value from request parameters
             if name not in request_param_dic:
                 if ":" + name in request_param_dic:
                     value = request_param_dic[":" + name]
@@ -471,11 +473,15 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                     raise HttpException(HTTPStatus.UNPROCESSABLE_ENTITY, "parameter '%s' is required" % name)
             else:
                 value = request_param_dic[name]
-            if parameter.annotation != inspect.Parameter.empty:
+            # 根据参数annotation类型转换数据
+            #   条件：有注解、无默认值、 value非None (None无法转换类型)
+            if parameter.annotation != inspect.Parameter.empty \
+                    and parameter.default == inspect.Parameter.empty and value is not None:
                 tp = parameter.annotation
                 try:
                     if tp == MultipartFile:
                         if not isinstance(value, MultipartFile):
+                            # 不用转换，Request中的param 已经对文件转换为了MultipartFile，这里只需要检查一下类型
                             raise ValueError("parameter '%s' is required to be a Multipart file" % name)
                     elif tp == dict:
                         value = json.loads(value)
