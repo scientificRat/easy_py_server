@@ -1,4 +1,4 @@
-from http.server import HTTPStatus
+from http import HTTPStatus
 from http.client import HTTPMessage
 from typing import (Optional, Dict, Any)
 from enum import Enum

@@ -1,6 +1,7 @@
 import unittest
 from easy_py_server import EasyPyServer, Method, Request
 import requests
+import multiprocessing as mt
 
 
 def mock_func():
@@ -24,10 +25,32 @@ class TestEasyPyServer(unittest.TestCase):
         self.assertTrue(mock.listeners_dic[url][0] == mock_func)
 
 
+class TestServerProcess(mt.Process):
+    def run(self) -> None:
+        addr, port = self._args
+        server = EasyPyServer(addr, port=port)
+
+        def set(data, r: Request):
+            r.set_session_attribute('data', data)
+            return "ok"
+
+        @server.get('/get')
+        def get(r: Request):
+            return r.get_session_attribute('data')
+
+        @server.get('/sum_2/:a/and/:bb')
+        def sum_2(a: int, bb: int):
+            return a + bb
+
+        server.add_request_listener('/set', [Method.GET], set)
+        server.run()
+
+
 class FunctionalTest(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.server = None
+        if hasattr(self, 'server') and self.server is not None:
+            return
         self.port = 8999
         self.addr = 'localhost'
         self.server = EasyPyServer(self.addr, port=self.port)
@@ -84,7 +107,9 @@ class FunctionalTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.server.server_close()
-        super().tearDown()
+        # self.process.kill()
+        # self.process.join()
+        pass
 
 
 if __name__ == '__main__':

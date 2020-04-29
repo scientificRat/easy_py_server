@@ -12,6 +12,7 @@ import urllib.parse
 import uuid
 import termcolor
 from http.server import (HTTPServer, BaseHTTPRequestHandler)
+from http import HTTPStatus
 from typing import (Tuple, Sequence)
 from socketserver import ThreadingMixIn
 from PIL.ImageFile import ImageFile
@@ -150,7 +151,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             content = response.get_content()
             if content is None:
                 content = b""
-            self.send_header("Content-Length", len(content))
+            self.send_header("Content-Length", str(len(content)))
             for cookie_str in response.get_cookie_str_list():
                 self.send_header("Set-Cookie", cookie_str)
             for key, value in response.get_additional_headers().items():
@@ -193,10 +194,10 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         def clean_expire_session():
             time.sleep(self.DEFAULT_SESSION_EXPIRE_SECONDS)
             self.server.sessions.pop(new_session_code)
-
-        threading.Thread(target=clean_expire_session).start()
+        # fixme: 开线程清理的做法可能不得当
+        threading.Thread(target=clean_expire_session, daemon=True).start()
         self.server.sessions[new_session_code] = session
-        expire_date = self.date_time_string(time.time() + self.DEFAULT_SESSION_EXPIRE_SECONDS)
+        expire_date = self.date_time_string(int(time.time()) + self.DEFAULT_SESSION_EXPIRE_SECONDS)
         session_cookie_str = self.SESSION_COOKIE_NAME + "=" + new_session_code + "; path=/; expires=" + expire_date
         return session_cookie_str
 
@@ -294,6 +295,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 response = self.call_listener(listener, request)
                 self.make_response(response)
         except Exception as e:
+            print(traceback.format_exc(e))
+            print(e)
             self.make_response_on_exception(e)
 
     def do_GET(self):
@@ -309,6 +312,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 response = self.call_listener(listener, request)
                 self.make_response(response)
         except Exception as e:
+            print(traceback.format_exc(e))
+            print(e)
             self.make_response_on_exception(e)
 
     def do_POST(self):
@@ -398,7 +403,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         else:
             try:
                 param = json.loads(src_str)
-            except Exception as e:
+            except json.JSONDecodeError as e:
                 pass
         return param
 
@@ -559,6 +564,7 @@ class EasyPyServer(ThreadingMixIn, HTTPServer):
     def start_serve(self, blocking=True):
         if not blocking:
             thread = threading.Thread(target=self.serve_forever)
+            thread.setDaemon(True)
             thread.start()
             return thread
         else:
@@ -571,6 +577,11 @@ class EasyPyServer(ThreadingMixIn, HTTPServer):
         print("[%s] server running on http://%s:%d" % (
             datetime.datetime.now().ctime(), self.listen_address, self.port))
         super(EasyPyServer, self).serve_forever()
+
+    def server_close(self) -> None:
+        super(EasyPyServer, self).server_close()
+        # self._BaseServer__shutdown_request = True
+        self.shutdown()
 
     def add_request_listener(self, path: str, methods: Sequence[Method], listener):
         path_params = re.findall("(:[^/]+)", path)

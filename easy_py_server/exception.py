@@ -17,10 +17,13 @@ class IllegalAccessException(HttpException):
 
 class WarpedInternalServerException(HttpException):
     def __init__(self, original_error, overwrite_info=None):
-        self.error = original_error
-        self.info = overwrite_info
+        if isinstance(original_error, WarpedInternalServerException):
+            self.error = original_error.error
+        else:
+            self.error = original_error
         if overwrite_info is None:
             overwrite_info = str(self.error)
+        self.info = overwrite_info
         HttpException.__init__(self, HTTPStatus.INTERNAL_SERVER_ERROR, self.info)
 
     def __str__(self):

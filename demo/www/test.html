@@ -6,16 +6,51 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
 </head>
 <body>
+<button onclick="send()">Send</button>
+<button onclick="send2()">Send2</button>
+
 
 </body>
 <script>
-    $.ajax({
-        url: 'clean',
-        method: 'POST',
-        data: {
-            v: "what",
-            b: "fuck",
-        }
-    })
+    function send() {
+        $.ajax({
+            url: 'ajax-json',
+            method: 'POST',
+            data: {
+                v: "s1",
+                b: "s2",
+                k: {
+                    m: "l",
+                }
+            },
+            success: function (resp) {
+                alert("success!");
+            },
+            error: function () {
+                alert("fail!");
+            }
+        })
+    }
+
+    function send2() {
+        $.ajax({
+            url: 'ajax-json',
+            method: 'POST',
+            data: JSON.stringify({
+                v: "s1",
+                b: "s2",
+                k: {
+                    m: "l",
+                }
+            }),
+            success: function (resp) {
+                alert("success!");
+            },
+            error: function () {
+                alert("fail!");
+            }
+        })
+    }
+
 </script>
 </html>

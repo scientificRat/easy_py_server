@@ -15,6 +15,13 @@ def post(key):
     return str(key)
 
 
+# ajax json
+@app.post("/ajax-json")
+def json_request(r: Request):
+    print(r.params)
+    return "Got"
+
+
 # uploading file
 @app.post("/multipart")
 def post(save_name: str, file: MultipartFile):
