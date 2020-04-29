@@ -27,4 +27,4 @@ class WarpedInternalServerException(HttpException):
         HttpException.__init__(self, HTTPStatus.INTERNAL_SERVER_ERROR, self.info)
 
     def __str__(self):
-        return "InternalException: \n" + str(self.info)
+        return "InternalServerException: \n" + str(self.info)
