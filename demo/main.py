@@ -73,4 +73,4 @@ def redirect():
 
 if __name__ == '__main__':
     # start the server (default is blocking)
-    app.run(blocking=False)
+    app.run(blocking=True)

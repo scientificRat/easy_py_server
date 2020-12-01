@@ -44,7 +44,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         'txt': 'text/plain',
         'html': 'text/html', 'htm': 'text/html', 'htx': 'text/html',
         'csv': 'text/csv',
-        'jpeg': 'image/jpeg', 'jpg': 'image/jpeg', 'jpe': 'image/jpeg',
+        'jpeg': 'image/jpeg', 'jpg': 'image/jpeg', 'jpe': 'image/jpeg', 'jfif': 'image/jpeg',
         'gif': 'image/gif',
         'png': 'image/png',
         'svg': 'image/svg+xml',
@@ -115,7 +115,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             rtn = listener(*pass_param_list)
             response = self.convert_rtn(rtn)
             session = request.get_session()
-            if session is not None and not request_with_session:
+            if session is not None and len(session) > 0 and not request_with_session:
                 # set new sessions
                 session_cookie_str = self.create_new_session(session)
                 response.set_cookie_str(session_cookie_str)
@@ -194,6 +194,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         def clean_expire_session():
             time.sleep(self.DEFAULT_SESSION_EXPIRE_SECONDS)
             self.server.sessions.pop(new_session_code)
+
         # fixme: 开线程清理的做法可能不得当
         threading.Thread(target=clean_expire_session, daemon=True).start()
         self.server.sessions[new_session_code] = session
@@ -238,7 +239,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-type", content_type)
             self.send_header("Content-Length", str(fs.st_size))
-            self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
+            self.send_header("Last-Modified", self.date_time_string(int(fs.st_mtime)))
             self.end_headers()
             while True:
                 buf = f.read(1024 * 16)
@@ -321,25 +322,25 @@ class EasyServerHandler(BaseHTTPRequestHandler):
 
     # fixme: should not be default, especially for static files
     def do_HEAD(self):
-        self.default_response_process(Method.POST)
+        self.default_response_process(Method.HEAD)
 
     def do_DELETE(self):
-        self.default_response_process(Method.POST)
+        self.default_response_process(Method.DELETE)
 
     def do_PUT(self):
-        self.default_response_process(Method.POST)
+        self.default_response_process(Method.PUT)
 
     def do_CONNECT(self):
-        self.default_response_process(Method.POST)
+        self.default_response_process(Method.CONNECT)
 
     def do_OPTIONS(self):
-        self.default_response_process(Method.POST)
+        self.default_response_process(Method.OPTIONS)
 
     def do_TRACE(self):
-        self.default_response_process(Method.POST)
+        self.default_response_process(Method.TRACE)
 
     def do_PATCH(self):
-        self.default_response_process(Method.POST)
+        self.default_response_process(Method.PATCH)
 
     def log_request(self, code="-", size="-"):
         # copy from werkzeug
@@ -546,8 +547,8 @@ class EasyPyServer(ThreadingMixIn, HTTPServer):
         self.static_folder = os.path.abspath(static_folder)
         self.verbose_exception = verbose_exception
         if not os.path.exists(self.static_folder):
-            self.static_folder = None
             print("[Warning] The setting static folder does not exist: {}".format(self.static_folder), file=sys.stderr)
+            self.static_folder = None
 
         self.handler = http_request_handler  # be compatible with customized handler
         self.handler.server_name = self.server_app_name
