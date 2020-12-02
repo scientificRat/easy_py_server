@@ -1,6 +1,7 @@
 easy_py_server
-A flexible plugin providing reliable HTTP service for your projects.
+A flexible microframework providing reliable HTTP service for your projects.
 
+* Easy to make HTTP services by pure python.
 * Flexible to integrate with your existing code **without** any configuration file or environ settings.
 * Spring MCV like parameter injection implemented by python decorator: `@post`, `@get` etc.
 * Easy to manage `static resources`,`session`, `cookies`, `path parameter`, `redirection`, `file uploading` etc.

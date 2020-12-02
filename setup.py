@@ -10,7 +10,7 @@ with codecs.open("easy_py_server/__init__.py", encoding="utf8") as f:
 
 setup(name='easy_py_server',
       version=version,
-      description='A flexible plugin providing reliable HTTP service for your projects',
+      description='A flexible microframework providing reliable HTTP service for your projects.',
       author='Zhengyue Huang',
       author_email='huangzhengyue.1996@gmail.com',
       url='https://github.com/scientificRat/easy_py_server.git',

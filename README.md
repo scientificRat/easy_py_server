@@ -2,8 +2,9 @@
 
 [![PyPI version](https://badge.fury.io/py/easy-py-server.svg)](https://badge.fury.io/py/easy-py-server)
 
-> A flexible plugin providing reliable HTTP service for your projects.
+> A flexible microframework providing reliable HTTP service for your projects.
 
+* Easy to make HTTP services by pure python.
 * Flexible to integrate with your existing code **without** any configuration file or environ settings.
 * Spring MCV like parameter injection implemented by python decorator: `@post`, `@get` etc.
 * Easy to manage `static resources`,`session`, `cookies`, `path parameter`, `redirection`, `file uploading` etc.
@@ -12,7 +13,7 @@
 
 ## Get started
 ### Environment
-* python3
+* python >= 3.5
 
 ### Install
 stable version:
@@ -27,53 +28,103 @@ pip3 install git+https://github.com/scientificRat/easy_py_server.git
 ### Demo 
 
 ```python
-from easy_py_server import EasyPyServer, Request, Response, MultipartFile
+from easy_py_server import EasyPyServer, Request, Response, MultipartFile, ResponseFile, ResponseConfig
 
-httpd = EasyPyServer('0.0.0.0', 8090) # create the server object
+eps = EasyPyServer('0.0.0.0', 8090, static_folder="www")
 
 
 # method GET
-@httpd.get("/api")
+@eps.get("/api")
 def demo(a: int, b: int):
     return dict(success=True, content="%d + %d = %d" % (a, b, a + b))
 
 
 # method POST
-@httpd.post("/post")
+@eps.post("/post")
 def post(key):
     return str(key)
 
 
+# ajax json
+@eps.post("/ajax-json")
+def json_request(r: Request):
+    print(r.params)
+    return "Got"
+
+
+# 自定义header
+@eps.post("/cross", ResponseConfig(headers={'Access-Control-Allow-Origin': '*'}))
+def cross_access():
+    return "post allow"
+
+
+# 自定义header
+@eps.get("/cross", ResponseConfig(headers={'Access-Control-Allow-Origin': '*'}))
+def cross_access_get():
+    return "get allow"
+
+
 # uploading file
-@httpd.post("/multipart")
+@eps.post("/multipart")
 def post(save_name: str, file: MultipartFile):
     save_path = '{}.txt'.format(save_name)
     file.save(save_path)
     return dict(success=True, message="save to {}".format(save_path))
 
 
+# download file
+@eps.get("/download")
+def download():
+    with open("www/cat.jpg", 'rb') as f:
+        all_bytes = f.read()
+    return ResponseFile(all_bytes, filename="download_cat.jpg")
+
+
 # path parameter
-@httpd.get("/api/:id")
-def demo(id):
-    return 'api' + id
+@eps.get("/api/:id")
+def demo_path(id: int):
+    return 'api' + str(id)
+
+
+@eps.get("/sum_2/:a/and/:b")
+def sum_2(a: int, b: int):
+    return a + b
+
+
+# same path, different methods
+@eps.get("/sum_3")
+def sum_3_get(a: float, b: float, c: float):
+    # dict object can be automatically converted to json string to response
+    return dict(success=True, rst=(a + b + c), message="by get method")
+
+
+@eps.post("/sum_3")
+def sum_3_post(a: float, b: float, c: float):
+    # dict object can be automatically converted to json string to response
+    return dict(success=True, rst=(a + b + c), message="by post method")
+
+
+@eps.get("/sum_many")
+def sum_many(arr: list):
+    return sum(arr)
 
 
 # set session
-@httpd.get("/set/:data")
+@eps.get("/set/:data")
 def set(request: Request, data):
     request.set_session_attribute("data", data)
     return "set: " + str(data)
 
 
 # read session
-@httpd.get("/query")
+@eps.get("/query")
 def query(request: Request):
     data = request.get_session_attribute("data")
     return "get: " + str(data)
 
 
 # redirection
-@httpd.get("/redirect")
+@eps.get("/redirect")
 def redirect():
     resp = Response()
     resp.set_redirection_url("/cat.jpg")
@@ -82,7 +133,8 @@ def redirect():
 
 if __name__ == '__main__':
     # start the server (default is blocking)
-    httpd.start_serve(blocking=True)
+    eps.run(blocking=True)
+
 ```
 
 ### Create directory for static resources(Optional)
@@ -99,19 +151,19 @@ python3 your-source.py
 
 ## Documentation
 
-For normal usages, you only need to know `class EasyPyServer`, `class Method`, `class Request`,`class Response`
-.You can import them by
+For normal usages, you only need to know `class EasyPyServer`, `class Method`, `class Request`,`class Response`, `class ResponseConfig`
+.You can easily import them by
 ```python
-from easy_py_server import EasyPyServer, Method, Request, Response
+from easy_py_server import EasyPyServer, Method, Request, Response, ResponseConfig
 ```
 
 ### Creating Server
 ```python
 from easy_py_server import EasyPyServer
 # create 
-httpd= EasyPyServer(listen_address="0.0.0.0", port=8090)
+eps = EasyPyServer(listen_address="0.0.0.0", port=8090)
 # run
-httpd.start_serve(blocking=True)
+eps.start_serve(blocking=True)
 ```
 
 ### Registering Service 
@@ -120,16 +172,23 @@ You can register a service by adding a decorator such as `@route`, `@get`, `@pos
  to use these decorators, they will register your functions as callback without changing the original code of your definition. Among them, decorator `@route` has full support for different methods: 
 
 ```python
-@httpd.route(path="/path/to/your/api", methods=[Method.GET])
+@eps.route(path="/path/to/your/api", methods=[Method.GET])
 def f(request: Request):
     return Response()
 ```
 You can bind `GET`/`POST` methods with a simpler `@get`/`@post` like it's shown in the demo code:
 ```python
-@httpd.get("/api")
+@eps.get("/api")
 def demo(a: int, b: int):
     return dict(success=True, content="%d + %d = %d" % (a, b, a + b))
 ```
+You can use the decorators to specify the response's `Content-Type` or customize headers. For example, you can set  `Access-Control-Allow-Origin: *` to enable cross site accessing.
+```python
+@eps.post("/cross", ResponseConfig(headers={'Access-Control-Allow-Origin': '*'}))
+def cross_access():
+    return "post allow"
+```
+
 > note: Decorators are the recommended way to register your service, but you can also
 > use the naive <server object>.add_request_listener() to do it. 
 
@@ -201,5 +260,3 @@ def show_image(image_path: str):
 
 ## More
 * Supporting for `ipv6` and `https` will come soon.  
-* Return value with specified content-type will come soon
-* Probably with potential security issues.
