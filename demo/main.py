@@ -49,6 +49,24 @@ def sum_2(a: int, b: int):
     return a + b
 
 
+# same path, different methods
+@app.get("/sum_3")
+def sum_3_get(a: float, b: float, c: float):
+    # dict object can be automatically converted to json string to response
+    return dict(success=True, rst=(a + b + c), message="by get method")
+
+
+@app.post("/sum_3")
+def sum_3_post(a: float, b: float, c: float):
+    # dict object can be automatically converted to json string to response
+    return dict(success=True, rst=(a + b + c), message="by post method")
+
+
+@app.get("/sum_many")
+def sum_many(arr: list):
+    return sum(arr)
+
+
 # set session
 @app.get("/set/:data")
 def set(request: Request, data):

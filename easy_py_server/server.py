@@ -27,10 +27,11 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     server_version = server_name + "/" + __version__
     resource_dir = None  # static file folder
     verbose_exception = True
+    error_content_type = "text/html; charset=utf-8"
     error_message_format = """<!DOCTYPE html>
     <html>
         <head>
-            <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+            <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
             <title>Error Page</title>
         </head>
         <body style='font-family:sans-serif'>
@@ -91,9 +92,11 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         if entity is None:
             for k in listeners_dic:
                 match = re.fullmatch(k, path)
-                if match is not None and len(listeners_dic[k]) == 3:
+                if match is not None:
+                    if method not in listeners_dic[k]:
+                        raise HttpException(HTTPStatus.METHOD_NOT_ALLOWED)
                     path_param_values = match.groups()
-                    _, _, params_key = listeners_dic[k]
+                    _, params_key = listeners_dic[k][method]
                     if len(path_param_values) == len(params_key):
                         for i in range(0, len(params_key)):
                             param[params_key[i]] = urllib.parse.unquote(path_param_values[i])
@@ -101,10 +104,9 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                         break
         if entity is None:
             return None
-        listener, methods, _ = entity
-        if listener is not None:
-            if method not in methods:
-                raise HttpException(HTTPStatus.METHOD_NOT_ALLOWED)
+        if method not in entity:
+            raise HttpException(HTTPStatus.METHOD_NOT_ALLOWED)
+        listener, _ = entity[method]
         return listener
 
     def call_listener(self, listener, request: Request) -> Response:
@@ -211,6 +213,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         if len(re.findall(r'(/\.\./)', path)) != 0:
             self.send_error(HTTPStatus.FORBIDDEN)
             return
+        # todo: problem with windows
         if len(path) == 0 or path[-1] == '/':
             indexes = ["index.html", "index.htm"]
             for index in indexes:
@@ -296,7 +299,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 response = self.call_listener(listener, request)
                 self.make_response(response)
         except Exception as e:
-            print(traceback.format_exc(e))
+            print(traceback.format_exc())
             print(e)
             self.make_response_on_exception(e)
 
@@ -313,7 +316,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 response = self.call_listener(listener, request)
                 self.make_response(response)
         except Exception as e:
-            print(traceback.format_exc(e))
+            print(traceback.format_exc())
             print(e)
             self.make_response_on_exception(e)
 
@@ -489,8 +492,10 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                         if not isinstance(value, MultipartFile):
                             # 不用转换，Request中的param 已经对文件转换为了MultipartFile，这里只需要检查一下类型
                             raise ValueError("parameter '%s' is required to be a Multipart file" % name)
-                    elif tp == dict:
+                    elif tp in (dict, list):
                         value = json.loads(value)
+                    elif tp == tuple:
+                        value = tuple(json.loads(value))
                     else:
                         value = tp(value)  # force convert
                 except Exception as e:
@@ -500,6 +505,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
 
     @staticmethod
     def convert_rtn(rtn) -> Response:
+        # todo: 或许应该区分一个RawResponse和便于用户使用的Response（设置header，同时自动解析content）
         if isinstance(rtn, Response):
             redirect_url = rtn.get_redirection_url()
             if redirect_url is not None:
@@ -590,7 +596,11 @@ class EasyPyServer(ThreadingMixIn, HTTPServer):
             path = path.replace(parm, r"([\S]+)")
         if len(path_params) != 0:
             path = re.compile(path)
-        self.listeners_dic[path] = (listener, methods, path_params)
+        if path in self.listeners_dic:
+            for method in methods:
+                self.listeners_dic[path][method] = listener, path_params
+        else:
+            self.listeners_dic[path] = {method: (listener, path_params) for method in methods}
 
     # decorators
     def route(self, path, methods=None):

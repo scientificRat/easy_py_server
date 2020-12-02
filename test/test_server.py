@@ -19,10 +19,12 @@ class TestEasyPyServer(unittest.TestCase):
 
         mock = Mock()
         url = "/i"
-        EasyPyServer.add_request_listener(mock, url, [Method.GET], mock_func)
+        EasyPyServer.add_request_listener(mock, url, [Method.GET, Method.OPTIONS], mock_func)
         # print(mock.listeners_dic)
         self.assertTrue(len(mock.listeners_dic) == 1)
-        self.assertTrue(mock.listeners_dic[url][0] == mock_func)
+        self.assertTrue(mock.listeners_dic[url][Method.GET][0] == mock_func)
+        self.assertTrue(Method.POST not in mock.listeners_dic[url])
+        self.assertTrue(mock.listeners_dic[url][Method.OPTIONS][0] == mock_func)
 
 
 class TestServerProcess(mt.Process):
