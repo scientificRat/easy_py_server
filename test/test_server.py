@@ -1,5 +1,5 @@
 import unittest
-from easy_py_server import EasyPyServer, Method, Request
+from easy_py_server import EasyPyServer, Method, Request, ResponseConfig
 import requests
 import multiprocessing as mt
 
@@ -56,6 +56,11 @@ class FunctionalTest(unittest.TestCase):
         def sum_list_post(arr: list):
             arr = [float(a) for a in arr]
             return "post" + str(sum(arr))
+
+        # 自定义header
+        @self.server.post("/cross", ResponseConfig(headers={'Access-Control-Allow-Origin': '*'}))
+        def cross_access():
+            return "post allow"
 
         self.server.add_request_listener('/set', [Method.GET], set)
         self.thread = self.server.start_serve(blocking=False)
@@ -133,6 +138,14 @@ class FunctionalTest(unittest.TestCase):
         self.assertEqual(rst.status_code, 200)
         self.assertEqual(rst.headers['Content-Type'], 'text/html; charset=utf-8')
         self.assertEqual(rst.text, 'post10.2')
+
+    def test_response_config(self):
+        base_url = f'http://{self.addr}:{self.port}'
+        rst = requests.post(f"{base_url}/cross")
+        self.assertEqual(rst.status_code, 200)
+        self.assertEqual(rst.headers['Content-Type'], 'text/html; charset=utf-8')
+        self.assertEqual(rst.headers['Access-Control-Allow-Origin'], '*')
+        self.assertEqual(rst.text, 'post allow')
 
     def test_session(self):
         s = requests.Session()

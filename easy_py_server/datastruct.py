@@ -145,3 +145,13 @@ class MultipartFile:
         rst = self.data[self.__data_pointer: end]
         self.__data_pointer = end
         return rst
+
+
+class ResponseConfig:
+    def __init__(self, headers=None, content_type=None):
+        self.headers = dict() if headers is None else headers
+        if type(self.headers) != dict:
+            raise ValueError("headers must be a dict")
+        self.content_type = content_type
+        if self.content_type is not None and type(self.content_type) != str:
+            raise ValueError("content_type must be a string")

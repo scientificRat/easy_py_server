@@ -1,4 +1,4 @@
-from easy_py_server import EasyPyServer, Request, Response, MultipartFile, ResponseFile
+from easy_py_server import EasyPyServer, Request, Response, MultipartFile, ResponseFile, ResponseConfig
 
 app = EasyPyServer('0.0.0.0', 8090, static_folder="www")
 
@@ -20,6 +20,18 @@ def post(key):
 def json_request(r: Request):
     print(r.params)
     return "Got"
+
+
+# 自定义header
+@app.post("/cross", ResponseConfig(headers={'Access-Control-Allow-Origin': '*'}))
+def cross_access():
+    return "post allow"
+
+
+# 自定义header
+@app.get("/cross", ResponseConfig(headers={'Access-Control-Allow-Origin': '*'}))
+def cross_access_get():
+    return "get allow"
 
 
 # uploading file

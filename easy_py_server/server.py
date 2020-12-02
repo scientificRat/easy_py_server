@@ -13,7 +13,7 @@ import uuid
 import termcolor
 from http.server import (HTTPServer, BaseHTTPRequestHandler)
 from http import HTTPStatus
-from typing import (Tuple, Sequence)
+from typing import (Tuple, Sequence, Callable)
 from socketserver import ThreadingMixIn
 from PIL.ImageFile import ImageFile
 from .datastruct import *
@@ -97,18 +97,18 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                     if method not in listeners_dic[k]:
                         raise HttpException(HTTPStatus.METHOD_NOT_ALLOWED)
                     path_param_values = match.groups()
-                    _, params_key = listeners_dic[k][method]
+                    _, params_key, _ = listeners_dic[k][method]
                     if len(path_param_values) == len(params_key):
                         for i in range(0, len(params_key)):
                             param[params_key[i]] = urllib.parse.unquote(path_param_values[i])
                         entity = listeners_dic[k]
                         break
         if entity is None:
-            return None
+            return None, None
         if method not in entity:
             raise HttpException(HTTPStatus.METHOD_NOT_ALLOWED)
-        listener, _ = entity[method]
-        return listener
+        listener, _, response_config = entity[method]
+        return listener, response_config
 
     def call_listener(self, listener, request: Request) -> Response:
         pass_param_list = self.generate_listener_parameters(listener, request)
@@ -128,10 +128,11 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         except Exception as e:
             raise WarpedInternalServerException(e)
 
-    def make_response(self, response: Response):
+    def make_response(self, response: Response, response_config: ResponseConfig):
         """
         Response to client according to `Response`
         :param response: Response object
+        :param response_config: ResponseConfig which is set by add_listener
         :return: None
         """
         # if error message is set, ignore any return content
@@ -159,6 +160,9 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                 self.send_header("Set-Cookie", cookie_str)
             for key, value in response.get_additional_headers().items():
                 self.send_header(key, value)
+            if response_config is not None and response_config.headers is not None:
+                for key, value in response_config.headers.items():
+                    self.send_header(key, value)
             self.end_headers()
             self.wfile.write(content)
 
@@ -205,7 +209,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         session_cookie_str = self.SESSION_COOKIE_NAME + "=" + new_session_code + "; path=/; expires=" + expire_date
         return session_cookie_str
 
-    def deal_static_file_request(self, path):
+    def deal_static_file_request(self, path, response_config: ResponseConfig):
         if self.resource_dir is None:
             self.send_error(HTTPStatus.FORBIDDEN)
             return
@@ -229,8 +233,14 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         file_basename = os.path.basename(path)
         postfix = file_basename.split('.')[-1].lower()
         default_type = 'application/octet-stream'
-        content_type = default_type if len(postfix) == len(file_basename) else self.extensions_map.get(postfix,
-                                                                                                       default_type)
+        if response_config is not None and response_config.content_type is not None:
+            content_type = response_config.content_type
+        else:
+            if len(postfix) == len(file_basename):
+                content_type = default_type
+            else:
+                content_type = self.extensions_map.get(postfix, default_type)
+        # read file
         try:
             f = open(path, 'rb')
         except OSError:
@@ -249,6 +259,9 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             self.send_header("Content-type", content_type)
             self.send_header("Content-Length", str(fs.st_size))
             self.send_header("Last-Modified", self.date_time_string(int(fs.st_mtime)))
+            if response_config is not None and response_config.headers is not None:
+                for key in response_config.headers:
+                    self.send_header(key, str(response_config.headers[key]))
             self.end_headers()
             while True:
                 buf = f.read(1024 * 16)
@@ -297,13 +310,13 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             path, param = self.parse_url_path(self.path)
             body, param_more = self.parse_request_body()
             param.update(param_more)
-            listener = self.find_listener(path, param, method)
+            listener, response_config = self.find_listener(path, param, method)
             if listener is None:
                 raise HttpException(HTTPStatus.NOT_FOUND)
             else:
                 request = self.construct_request_object(param)
                 response = self.call_listener(listener, request)
-                self.make_response(response)
+                self.make_response(response, response_config)
         except Exception as e:
             print(traceback.format_exc())
             print(e)
@@ -314,13 +327,13 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             # parse and separate request url
             path, param = self.parse_url_path(self.path)
             # find listener. request will be regarded as static resource if no listener existed
-            listener = self.find_listener(path, param, Method.GET)
+            listener, response_config = self.find_listener(path, param, Method.GET)
             if listener is None:
-                self.deal_static_file_request(path)
+                self.deal_static_file_request(path, response_config)
             else:
                 request = self.construct_request_object(param)
                 response = self.call_listener(listener, request)
-                self.make_response(response)
+                self.make_response(response, response_config)
         except Exception as e:
             print(traceback.format_exc())
             print(e)
@@ -609,7 +622,8 @@ class EasyPyServer(ThreadingMixIn, HTTPServer):
         # self._BaseServer__shutdown_request = True
         self.shutdown()
 
-    def add_request_listener(self, path: str, methods: Sequence[Method], listener):
+    def add_request_listener(self, path: str, methods: Sequence[Method], listener: Callable,
+                             response_config: ResponseConfig = None):
         path_params = re.findall("(:[^/]+)", path)
         for parm in path_params:
             path = path.replace(parm, r"([\S]+)")
@@ -617,23 +631,23 @@ class EasyPyServer(ThreadingMixIn, HTTPServer):
             path = re.compile(path)
         if path in self.listeners_dic:
             for method in methods:
-                self.listeners_dic[path][method] = listener, path_params
+                self.listeners_dic[path][method] = listener, path_params, response_config
         else:
-            self.listeners_dic[path] = {method: (listener, path_params) for method in methods}
+            self.listeners_dic[path] = {method: (listener, path_params, response_config) for method in methods}
 
     # decorators
-    def route(self, path, methods=None):
+    def route(self, path, methods=None, response_config=None):
         if methods is None:
             methods = [m for m in Method]
 
         def converter(listener):
-            self.add_request_listener(path, methods, listener)
+            self.add_request_listener(path, methods, listener, response_config)
             return listener
 
         return converter
 
-    def get(self, path):
-        return self.route(path, [Method.GET])
+    def get(self, path, response_config=None):
+        return self.route(path, [Method.GET], response_config)
 
-    def post(self, path):
-        return self.route(path, [Method.POST])
+    def post(self, path, response_config=None):
+        return self.route(path, [Method.POST], response_config)
