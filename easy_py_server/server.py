@@ -63,6 +63,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
     }
     SESSION_COOKIE_NAME = "EASY_SESSION_ID"
     DEFAULT_SESSION_EXPIRE_SECONDS = 12 * 3600
+    DEFAULT_INDEX_FILES = ('index.html', 'index.htm')
 
     def __init__(self, conn_sock, client_address, server):
         # client_address : (ip, port)
@@ -208,23 +209,28 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         if self.resource_dir is None:
             self.send_error(HTTPStatus.FORBIDDEN)
             return
-        path = os.path.join(self.resource_dir, path[1:])
         # for security
         if len(re.findall(r'(/\.\./)', path)) != 0:
             self.send_error(HTTPStatus.FORBIDDEN)
             return
-        # todo: problem with windows
-        if len(path) == 0 or path[-1] == '/':
-            indexes = ["index.html", "index.htm"]
-            for index in indexes:
-                if os.path.isfile(path + index):
-                    path += index
+        path = os.path.join(self.resource_dir, path[1:])
+        if not os.path.exists(path):
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        if os.path.isdir(path):
+            for index in self.DEFAULT_INDEX_FILES:
+                new_path = os.path.join(path, index)
+                if os.path.isfile(new_path) and os.path.exists(new_path):
+                    path = new_path
+                    break
         if os.path.isdir(path):
             self.send_error(HTTPStatus.FORBIDDEN)
             return
-        postfix = path.split('.')[-1].lower()
+        file_basename = os.path.basename(path)
+        postfix = file_basename.split('.')[-1].lower()
         default_type = 'application/octet-stream'
-        content_type = default_type if len(postfix) == len(path) else self.extensions_map.get(postfix, default_type)
+        content_type = default_type if len(postfix) == len(file_basename) else self.extensions_map.get(postfix,
+                                                                                                       default_type)
         try:
             f = open(path, 'rb')
         except OSError:
@@ -403,12 +409,25 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         match = re.findall(r'(^|&)([^=]+)=([^&]*)', src_str)
         if len(match) > 0:
             for item in re.findall(r'(^|&)([^=]+)=([^&]*)', src_str):
-                param[urllib.parse.unquote(item[1])] = urllib.parse.unquote(item[2])
+                key = urllib.parse.unquote(item[1])
+                value = urllib.parse.unquote(item[2])
+                # to deal with params like arr=10&arr=12&arr=15
+                if key in param:
+                    if type(param[key]) == list:
+                        param[key].append(value)
+                    else:
+                        param[key] = [param[key], value]
+                else:
+                    param[key] = value
         else:
             try:
                 param = json.loads(src_str)
             except json.JSONDecodeError as e:
                 pass
+        # make all the request param string
+        for key in param:
+            if type(param[key]) != str:
+                param[key] = json.dumps(param[key])
         return param
 
     @staticmethod

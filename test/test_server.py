@@ -27,27 +27,6 @@ class TestEasyPyServer(unittest.TestCase):
         self.assertTrue(mock.listeners_dic[url][Method.OPTIONS][0] == mock_func)
 
 
-class TestServerProcess(mt.Process):
-    def run(self) -> None:
-        addr, port = self._args
-        server = EasyPyServer(addr, port=port)
-
-        def set(data, r: Request):
-            r.set_session_attribute('data', data)
-            return "ok"
-
-        @server.get('/get')
-        def get(r: Request):
-            return r.get_session_attribute('data')
-
-        @server.get('/sum_2/:a/and/:bb')
-        def sum_2(a: int, bb: int):
-            return a + bb
-
-        server.add_request_listener('/set', [Method.GET], set)
-        server.run()
-
-
 class FunctionalTest(unittest.TestCase):
 
     def setUp(self) -> None:
@@ -69,9 +48,91 @@ class FunctionalTest(unittest.TestCase):
         def sum_2(a: int, bb: int):
             return a + bb
 
+        @self.server.get('/sum_list')
+        def sum_list_get(arr: list):
+            return "get" + str(sum(arr))
+
+        @self.server.post('/sum_list')
+        def sum_list_post(arr: list):
+            arr = [float(a) for a in arr]
+            return "post" + str(sum(arr))
+
         self.server.add_request_listener('/set', [Method.GET], set)
-        # fixme: debug 模式下会block 很奇怪
         self.thread = self.server.start_serve(blocking=False)
+
+    def test_static(self):
+        base_url = f'http://{self.addr}:{self.port}'
+
+        def test_file(url, expect_text, expect_content_type='text/html'):
+            rst = requests.get(url)
+            self.assertEqual(rst.status_code, 200)
+            self.assertEqual(rst.headers['Content-Length'], str(len(rst.text)))
+            self.assertEqual(rst.headers['Content-Type'], expect_content_type)
+            self.assertEqual(rst.text, expect_text)
+
+        def test_file_not_exist(url):
+            rst = requests.get(url)
+            self.assertEqual(rst.status_code, 404)
+            self.assertEqual(rst.headers['Content-Type'], 'text/html; charset=utf-8')
+            self.assertTrue(len(rst.text) > 0)
+
+        def test_forbidden(url):
+            rst = requests.get(url)
+            self.assertEqual(rst.status_code, 403)
+            self.assertEqual(rst.headers['Content-Type'], 'text/html; charset=utf-8')
+            self.assertTrue(len(rst.text) > 0)
+
+        test_file(f'{base_url}', '<!DOCTYPE html>test')
+        test_file(f'{base_url}/', '<!DOCTYPE html>test')
+        test_file(f'{base_url}?', '<!DOCTYPE html>test')
+        test_file(f'{base_url}/?a=10', '<!DOCTYPE html>test')
+        test_file(f'{base_url}?b=10', '<!DOCTYPE html>test')
+
+        test_file(f'{base_url}/assets', '<!DOCTYPE html>test2')
+        test_file(f'{base_url}/assets/', '<!DOCTYPE html>test2')
+        test_file(f'{base_url}/assets/?', '<!DOCTYPE html>test2')
+        test_file(f'{base_url}/assets/?a=10', '<!DOCTYPE html>test2')
+        test_file(f'{base_url}/assets?b=10', '<!DOCTYPE html>test2')
+        test_file(f'{base_url}/assets/index.html', '<!DOCTYPE html>test2')
+        test_file(f'{base_url}/assets/index.html?', '<!DOCTYPE html>test2')
+        test_file(f'{base_url}/assets/index.html?b=10', '<!DOCTYPE html>test2')
+
+        test_file(f'{base_url}/assets/js/t-t.min.js', 'const test = 0', 'application/javascript')
+        test_file(f'{base_url}/assets/js/t-t.min.js?a=10s', 'const test = 0', 'application/javascript')
+
+        test_file_not_exist(f'{base_url}/assets/js/t-t.min.j')
+        test_file_not_exist(f'{base_url}/a')
+        test_file_not_exist(f'{base_url}/dad/adf')
+
+        test_forbidden(f'{base_url}/none')
+        test_forbidden(f'{base_url}/assets/js/')
+        test_forbidden(f'{base_url}/assets/js')
+        test_forbidden(f'{base_url}/assets/js?a=12')
+
+    def test_api(self):
+        base_url = f'http://{self.addr}:{self.port}'
+        rst = requests.get(f"{base_url}/sum_list?arr=[1.1, 2,3,4,5 ]")
+        self.assertEqual(rst.status_code, 200)
+        self.assertEqual(rst.headers['Content-Type'], 'text/html; charset=utf-8')
+        self.assertEqual(rst.text, 'get15.1')
+
+        # post by request type: application/x-www-form-urlencoded
+        rst = requests.post(f"{base_url}/sum_list", data=dict(arr=[1, 2, 3, 4, 5.2]))
+        self.assertEqual(rst.status_code, 200)
+        self.assertEqual(rst.headers['Content-Type'], 'text/html; charset=utf-8')
+        self.assertEqual(rst.text, 'post15.2')
+
+        # post by request type: application/x-www-form-urlencoded
+        rst = requests.post(f"{base_url}/sum_list", data=dict(arr=[1, 2, 3, 4, 5.5], none='nothing'))
+        self.assertEqual(rst.status_code, 200)
+        self.assertEqual(rst.headers['Content-Type'], 'text/html; charset=utf-8')
+        self.assertEqual(rst.text, 'post15.5')
+
+        # post by request type: application/json
+        rst = requests.post(f"{base_url}/sum_list", json=dict(arr=[1, 2.2, 3, 4], none='nothing'))
+        self.assertEqual(rst.status_code, 200)
+        self.assertEqual(rst.headers['Content-Type'], 'text/html; charset=utf-8')
+        self.assertEqual(rst.text, 'post10.2')
 
     def test_session(self):
         s = requests.Session()
