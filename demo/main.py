@@ -9,6 +9,16 @@ def demo(a: int, b: int):
     return dict(success=True, content="%d + %d = %d" % (a, b, a + b))
 
 
+@eps.get("/test_bool")
+def test_bool(a: bool = False):
+    return str(a), str(type(a))
+
+
+@eps.get("/test_default")
+def test_bool(a=10):
+    return str(a), str(type(a))
+
+
 # method POST
 @eps.post("/post")
 def post(key):

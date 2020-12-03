@@ -515,9 +515,8 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             else:
                 value = request_param_dic[name]
             # 根据参数annotation类型转换数据
-            #   条件：有注解、无默认值、 value非None (None无法转换类型)
-            if parameter.annotation != inspect.Parameter.empty \
-                    and parameter.default == inspect.Parameter.empty and value is not None:
+            #   条件：有注解、value非None (None无法转换类型)
+            if parameter.annotation != inspect.Parameter.empty and value is not None:
                 tp = parameter.annotation
                 try:
                     if tp == MultipartFile:
@@ -528,6 +527,13 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                         value = json.loads(value)
                     elif tp == tuple:
                         value = tuple(json.loads(value))
+                    elif tp == bool:
+                        try:
+                            # may be a list/dict/bool/int, 这样做是为了正确处理传入的true/false 1,0 这种字符串的bool值
+                            possible_value = json.loads(value)
+                        except json.JSONDecodeError as e:
+                            possible_value = value
+                        value = bool(possible_value)
                     else:
                         value = tp(value)  # force convert
                 except Exception as e:
