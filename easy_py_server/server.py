@@ -424,6 +424,11 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             for item in re.findall(r'(^|&)([^=]+)=([^&]*)', src_str):
                 key = urllib.parse.unquote(item[1])
                 value = urllib.parse.unquote(item[2])
+                enforced_list_param = False
+                # to deal with params like arr[]=10&arr[]=12&arr[]=15
+                if len(key) > 2 and key[-2:] == '[]':
+                    key = key[:-2]
+                    enforced_list_param = True
                 # to deal with params like arr=10&arr=12&arr=15
                 if key in param:
                     if type(param[key]) == list:
@@ -431,7 +436,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
                     else:
                         param[key] = [param[key], value]
                 else:
-                    param[key] = value
+                    param[key] = value if not enforced_list_param else [value]
         else:
             try:
                 param = json.loads(src_str)
