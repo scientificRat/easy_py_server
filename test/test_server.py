@@ -89,9 +89,13 @@ class FunctionalTest(unittest.TestCase):
 
         test_file(f'{base_url}', '<!DOCTYPE html>test')
         test_file(f'{base_url}/', '<!DOCTYPE html>test')
+        test_file(f'{base_url}/index.html', '<!DOCTYPE html>test')
         test_file(f'{base_url}?', '<!DOCTYPE html>test')
         test_file(f'{base_url}/?a=10', '<!DOCTYPE html>test')
         test_file(f'{base_url}?b=10', '<!DOCTYPE html>test')
+
+        test_file(f'{base_url}/中文路径', '<!DOCTYPE html>test chinese')
+        test_file(f'{base_url}/中文路径/index.html', '<!DOCTYPE html>test chinese')
 
         test_file(f'{base_url}/assets', '<!DOCTYPE html>test2')
         test_file(f'{base_url}/assets/', '<!DOCTYPE html>test2')
@@ -108,6 +112,10 @@ class FunctionalTest(unittest.TestCase):
         test_file_not_exist(f'{base_url}/assets/js/t-t.min.j')
         test_file_not_exist(f'{base_url}/a')
         test_file_not_exist(f'{base_url}/dad/adf')
+        test_file_not_exist(f'{base_url}/ ')
+        test_file_not_exist(f'{base_url}/中文路径 ')
+        test_file_not_exist(f'{base_url}/ 中文路径')
+        test_file_not_exist(f'{base_url}/中文路径/ ')
 
         test_forbidden(f'{base_url}/none')
         test_forbidden(f'{base_url}/assets/js/')

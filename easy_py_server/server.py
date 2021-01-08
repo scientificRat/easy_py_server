@@ -193,17 +193,17 @@ class EasyServerHandler(BaseHTTPRequestHandler):
             cookie_dict[key] = value
         return cookie_dict
 
+    def _clean_expire_session(self, session_code):
+        time.sleep(self.DEFAULT_SESSION_EXPIRE_SECONDS)
+        self.server.sessions.pop(session_code)
+
     def create_new_session(self, session: dict) -> str:
         new_session_code = str(uuid.uuid1()).replace("-", "")
         while new_session_code in self.server.sessions:
             new_session_code = str(uuid.uuid1()).replace("-", "")
 
-        def clean_expire_session():
-            time.sleep(self.DEFAULT_SESSION_EXPIRE_SECONDS)
-            self.server.sessions.pop(new_session_code)
-
-        # fixme: 开线程清理的做法可能不得当
-        threading.Thread(target=clean_expire_session, daemon=True).start()
+        # fixme: 开线程清理的做法可能不得当, 可以只用一个清理线程
+        threading.Thread(target=self._clean_expire_session, args=(new_session_code,), daemon=True).start()
         self.server.sessions[new_session_code] = session
         expire_date = self.date_time_string(int(time.time()) + self.DEFAULT_SESSION_EXPIRE_SECONDS)
         session_cookie_str = self.SESSION_COOKIE_NAME + "=" + new_session_code + "; path=/; expires=" + expire_date
@@ -455,7 +455,7 @@ class EasyServerHandler(BaseHTTPRequestHandler):
         if len(path) > 1 and path[-1] == '/':
             path = path[:-1]
         param = {} if len(row) < 2 else EasyServerHandler.parse_parameter(row[1])
-        return path, param
+        return urllib.parse.unquote(path), param
 
     @staticmethod
     def parse_multipart_form_data(body: bytes, boundary: bytes):
